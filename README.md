@@ -78,7 +78,7 @@ Import with `python addresses.py /path/to/archive.zip`. Import is atomic. Only a
 
 ## Warranty and seller details
 
-ReKlik.shop is the visible brand. The user-supplied legal seller SNS Location is limited to required seller/checkout/receipt disclosures. The local operating address, phone and email use the supplied local reference; there is no outbound link to that reference site.
+ReKlik.shop is the visible brand. The user-supplied legal seller Nikola's Electric is limited to required seller/checkout/receipt disclosures. The local operating address, phone and email use the supplied local reference; there is no outbound link to that reference site.
 
 Optional warranty defaults use the published local benchmark of RSD 600/month, so 1/2/3 additional months cost 600/1200/1800 RSD; each is editable. The competitor's current promotional cart included a longer warranty, so these are extrapolated ReKlik prices, not claims about an equivalent currently chargeable competitor offer. The commercial extension starts after applicable statutory conformity rights and never replaces them. Battery exclusion is confined to the optional warranty terms/documentation. Seller registration/tax particulars and fiscal invoicing arrangements must be supplied by the operator where applicable; do not invent them.
 

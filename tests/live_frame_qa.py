@@ -1,11 +1,12 @@
-"""Exercise real HTTPS framing with disposable inventory and a mocked card redirect.
+"""Exercise public HTTPS framing with an intercepted QA backend and mocked card redirect.
 
 The browser alone substitutes the test backend endpoint; public inventory is untouched.
 """
 import json
+from html import escape
+from urllib.parse import urljoin
 import os
 from pathlib import Path
-import re
 import subprocess
 import tempfile
 import time
@@ -38,25 +39,29 @@ serve(app.app,host='127.0.0.1',port=4342)
 '''
     log=open(state/'server.log','w')
     server=subprocess.Popen([PYTHON,'-c',launcher],cwd=ROOT,env=env,stdout=log,stderr=log)
-    tunnel=None
     try:
         for _ in range(60):
             try:
                 if urlopen('http://127.0.0.1:4342/health',timeout=1).status==200:break
             except OSError:time.sleep(.1)
-        (state/'empty.yml').touch()
-        tunnel_log=open(state/'tunnel.log','w')
-        tunnel=subprocess.Popen(['/usr/bin/cloudflared','tunnel','--no-autoupdate','--config',str(state/'empty.yml'),'--url','http://127.0.0.1:4342'],env=dict(os.environ,HOME=temporary),stdout=tunnel_log,stderr=tunnel_log)
-        backend=None
-        for _ in range(120):
-            match=re.search(r'https://[a-z0-9-]+\.trycloudflare\.com',(state/'tunnel.log').read_text())
-            if match:backend=match.group(0);break
-            time.sleep(.4)
-        assert backend,'QA tunnel not established'
+        backend='https://reklik-qa.trycloudflare.com'
         with sync_playwright() as p:
             browser=p.chromium.launch(executable_path='/usr/bin/google-chrome',headless=True,args=['--no-sandbox'])
             page=browser.new_page(viewport={'width':390,'height':844},is_mobile=True,has_touch=True)
+            page.set_default_timeout(10000)
             errors=[];page.on('pageerror',lambda error:errors.append(str(error)))
+            def proxy(route):
+                request=route.request
+                headers=request.all_headers()
+                headers['host']='reklik-qa.trycloudflare.com'
+                response=page.context.request.fetch('http://127.0.0.1:4342'+request.url.removeprefix(backend),method=request.method,headers=headers,data=request.post_data_buffer,max_redirects=0)
+                if response.status in (301,302,303,307,308):
+                    # Playwright intercepts only the first URL of a redirect chain.
+                    # Reissue the destination as a fresh navigation within this QA browser.
+                    target=escape(urljoin(request.url,response.headers['location']),quote=True)
+                    route.fulfill(status=200,content_type='text/html',body='<meta http-equiv="refresh" content="0;url='+target+'">')
+                else:route.fulfill(response=response)
+            page.route(backend+'/**',proxy)
             page.route('https://nbulatovi.github.io/reklik.shop/backend.json?*',lambda route:route.fulfill(json={'backend':backend}))
             page.route('https://whop.com/checkout/ch_qa_stub/',lambda route:route.fulfill(body='<title>QA payment redirect</title><p>No payment occurs.</p>',content_type='text/html'))
             def fill(method):
@@ -72,7 +77,11 @@ serve(app.app,host='127.0.0.1',port=4342)
                 return frame
             frame=fill('cod')
             frame.locator('[data-order-submit]').click()
-            page.wait_for_url('**/potvrda/?order=*',timeout=30000)
+            try:page.wait_for_url('**/potvrda/?order=*',timeout=10000)
+            except Exception:
+                print('COD failure',[(f.url,f.locator('body').inner_text()[:2400]) for f in page.frames],flush=True)
+                print('JS errors',errors,flush=True)
+                raise
             frame.get_by_role('heading',name='Hvala na poverenju.').wait_for()
             assert 'Горња Добриња' in frame.locator('body').inner_text()
             assert not page.evaluate('document.documentElement.scrollWidth>innerWidth')
@@ -83,7 +92,6 @@ serve(app.app,host='127.0.0.1',port=4342)
             assert page.title()=='QA payment redirect'
             assert not errors,errors
             browser.close()
-            print(json.dumps({'result':'passed','flows':['public HTTPS iframe','partitioned session cookie','mobile Cyrillic village COD','outer confirmation URL','top-level card redirect (mock, no charge)'],'javascript_errors':errors}))
+            print(json.dumps({'result':'passed','flows':['public storefront iframe with intercepted QA backend','partitioned session cookie','mobile Cyrillic village COD','outer confirmation URL','top-level card redirect (mock, no charge)'],'javascript_errors':errors}))
     finally:
-        if tunnel:tunnel.terminate();tunnel.wait(timeout=15);tunnel_log.close()
         server.terminate();server.wait(timeout=15);log.close()
