@@ -1,0 +1,26 @@
+{% from 'macros.html' import icon with context %}
+<!doctype html><html lang="sr-Latn-RS"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{page_title}} | {{cfg.brand}}</title>
+<meta name="description" content="{% block description %}{{cfg.brand}} — sertifikovano obnovljeni laptopovi, telefoni i tableti. Testirani uređaji, jednostavna kupovina karticom ili pouzećem. Dostava i preuzimanje u Novom Beogradu.{% endblock %}">
+<meta name="theme-color" content="#292929"><meta name="color-scheme" content="light">
+{% if private_page or not cfg.indexing_enabled %}<meta name="robots" content="noindex, nofollow">{% else %}<meta name="robots" content="index, follow, max-image-preview:large">{% endif %}
+<link rel="canonical" href="{{cfg.canonical_url}}{{current_path}}">
+<meta property="og:type" content="{% block ogtype %}website{% endblock %}"><meta property="og:title" content="{{page_title}} | {{cfg.brand}}"><meta property="og:description" content="Testirana tehnologija. Novi početak. Sertifikovano obnovljeni uređaji u ReKlik prodavnici."><meta property="og:url" content="{{cfg.canonical_url}}{{current_path}}"><meta property="og:image" content="{{cfg.canonical_url}}/assets/social-card.svg">
+<link rel="icon" href="{{base}}/assets/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="{{base}}/assets/style.css">
+{% block head %}{% endblock %}
+<script src="{{base}}/assets/site.js" defer></script>
+{% if not private_page %}<script type="application/ld+json">{{ {'@context':'https://schema.org','@type':'Store','name':cfg.brand,'url':cfg.canonical_url,'telephone':cfg.phone,'email':cfg.email,'address':{'@type':'PostalAddress','streetAddress':'Bulevar Mihaila Pupina 10z, YU Biznis centar','addressLocality':'Novi Beograd','postalCode':'11070','addressCountry':'RS'}}|tojson }}</script>{% endif %}
+</head><body class="{{'embedded' if embedded else ''}}" data-base="{{base}}" data-live="{{'1' if live else '0'}}">
+<a class="skip-link" href="#main">Pređi na sadržaj</a>
+{% if not embedded %}<div class="announcement"><div class="container"><span>{{icon('check',14)}} Sertifikovano obnovljeno. Testirano. Spremno za vas.</span><a href="tel:{{cfg.phone}}">+381 63 697 007</a></div></div>
+<header class="site-header"><div class="container header-main"><a class="logo" href="{{base}}/" aria-label="ReKlik.shop početna">Re<span>Klik</span><i>.</i><small>shop</small></a>
+<form action="{{base}}/katalog/" method="get" class="header-search" role="search"><label class="sr-only" for="header-q">Pretraži uređaje</label>{{icon('search',19)}}<input id="header-q" type="search" name="q" placeholder="Koji je vaš sledeći uređaj?" value="{{query|default('')}}" autocomplete="off"><button aria-label="Pretraži">{{icon('arrow',18)}}</button></form>
+<a class="header-contact" href="{{base}}/kontakt/">Pomoć pri izboru<br><strong>Tu smo za vas</strong></a>
+<a class="cart-link" href="{{base}}/korpa/" aria-label="Otvori korpu">{{icon('bag',25)}}<span class="cart-count" data-cart-count>0</span><span class="desktop-only">Korpa</span></a></div>
+<nav class="main-nav container" aria-label="Glavna navigacija"><a class="nav-all" href="{{base}}/katalog/">Svi uređaji</a>{% for cat in categories %}<a href="{{base}}/kategorija/{{cat.slug}}/">{{icon(cat.icon,19)}}{{cat.name}}</a>{% endfor %}<a class="nav-about" href="{{base}}/o-nama/">Zašto ReKlik?</a></nav></header>{% endif %}
+<main id="main">{% block content %}{% endblock %}</main>
+{% if not embedded %}<section class="contact-band"><div class="container"><div><span class="eyebrow">PRAVI LJUDI. DOBAR SAVET.</span><h2>Niste sigurni koji uređaj je za vas?</h2><p>Recite nam šta vam treba. Pomoći ćemo vam da izaberete.</p></div><a class="button button-light" href="https://wa.me/38163697007" rel="noopener noreferrer" target="_blank">Pišite nam na WhatsApp {{icon('arrow',18)}}</a></div></section>
+<footer class="site-footer"><div class="container footer-grid"><div><a class="logo" href="{{base}}/">Re<span>Klik</span><i>.</i><small>shop</small></a><p>Odlična tehnologija zaslužuje<br>još jedan početak.</p><div class="payment-marks"><span>VISA</span><span>Mastercard</span><span>Pouzeće</span></div></div><div><h3>Istražite</h3>{% for cat in categories %}<a href="{{base}}/kategorija/{{cat.slug}}/">{{cat.name}}</a>{% endfor %}</div><div><h3>Kupovina bez nedoumica</h3><a href="{{base}}/dostava/">Dostava i plaćanje</a><a href="{{base}}/garancija/">Kvalitet i dodatna garancija</a><a href="{{base}}/povracaj/">Povraćaj i reklamacije</a><a href="{{base}}/uslovi/">Podaci o prodavcu i uslovi</a><a href="{{base}}/privatnost/">Privatnost</a></div><div><h3>Posetite nas</h3><p>Bulevar Mihaila Pupina 10z<br>YU Biznis centar<br>11070 Novi Beograd</p><a href="tel:{{cfg.phone}}">+381 63 697 007</a><a href="mailto:{{cfg.email}}">{{cfg.email}}</a></div></div><div class="container footer-bottom"><span>© {{year}} {{cfg.brand}} · Bez reklama. Bez analitičkog praćenja.</span><a href="{{base}}/admin/">Administracija {{icon('lock',13)}}</a></div></footer>{% endif %}
+{% block scripts %}{% endblock %}
+</body></html>

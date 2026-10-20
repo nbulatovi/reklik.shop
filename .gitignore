@@ -1,0 +1,10 @@
+__pycache__/
+.venv/
+.env
+*.sqlite*
+*.log
+.state/
+test-results/
+.pytest_cache/
+.public-build/
+.public-previous/
