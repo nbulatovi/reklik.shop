@@ -85,7 +85,7 @@ def export():
     for path in urls:
         sitemap += '<url><loc>' + escape(cfg['canonical_url'] + path) + '</loc></url>'
     (temp / 'sitemap.xml').write_text(sitemap + '</urlset>\n')
-    (temp / '404.html').write_text('<!doctype html><html lang="sr"><meta charset="utf-8"><meta name="robots" content="noindex"><title>ReKlik — Stranica nije pronađena</title><h1>Stranica nije pronađena.</h1><p><a href="'+base+'/katalog/">Pogledajte katalog uređaja</a></p></html>')
+    (temp / '404.html').write_text('<!doctype html><html lang="sr"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>ReKlik — Stranica nije pronađena</title><h1>Stranica nije pronađena.</h1><p><a href="'+base+'/katalog/">Pogledajte katalog uređaja</a></p></html>')
     backup = store.ROOT / '.public-previous'
     if backup.exists():
         shutil.rmtree(backup)
