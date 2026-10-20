@@ -100,6 +100,7 @@ timeoutSec = 15
         prompt='''Find manufacturer specifications for a refurbished device entered by a shop owner.
 Use web search and open primary manufacturer support/specification pages. Return only the requested JSON.
 Write Serbian Latin customer text. Use 4 to 10 useful specs, prioritizing processor, RAM, storage, display.
+Do not discuss batteries or battery warranty in customer-facing specs or description; keep uncertainty in internal notes.
 Only include facts supported by the model input or manufacturer sources. Never invent this unit's RAM,
 SSD capacity, CPU SKU, color, operating-system licence, battery health or accessories. If the exact model
 has multiple configurations, list the verified family/range with "zavisi od konfiguracije" or omit the
