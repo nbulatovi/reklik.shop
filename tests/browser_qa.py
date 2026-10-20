@@ -29,7 +29,8 @@ Image.new('RGB',(1200,900),(218,220,223)).save(store.STATE/'camera.jpg')
 '''
     subprocess.run([PYTHON,'-c',fixture],cwd=ROOT,env=env,check=True)
     log = open(Path(state)/'server.log','w')
-    server = subprocess.Popen([PYTHON,'app.py'],cwd=ROOT,env=env,stdout=log,stderr=log)
+    launcher='import app; from waitress import serve; app.queue_publish=lambda:None; serve(app.app,host="127.0.0.1",port=4341)'
+    server = subprocess.Popen([PYTHON,'-c',launcher],cwd=ROOT,env=env,stdout=log,stderr=log)
     try:
         origin='http://127.0.0.1:4341'
         for _ in range(80):
