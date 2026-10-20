@@ -26,6 +26,15 @@ app = Flask(__name__, static_folder='assets', static_url_path='/assets')
 register_heif_opener()
 app.config.update(MAX_CONTENT_LENGTH=35*1024*1024, TEMPLATES_AUTO_RELOAD=True)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1)
+if os.environ.get('REKLIK_SECURE_COOKIES') == '1':
+    # The loopback service is exposed exclusively through our HTTPS tunnel.
+    # cloudflared does not consistently forward the external URL scheme.
+    proxy_application = app.wsgi_app
+    def https_tunnel(environ, start_response):
+        environ['wsgi.url_scheme'] = 'https'
+        environ['HTTP_X_FORWARDED_PROTO'] = 'https'
+        return proxy_application(environ,start_response)
+    app.wsgi_app = https_tunnel
 CONFIG = store.STATE / 'private.json'
 if not CONFIG.exists():
     raise RuntimeError('Run setup.py first to initialize the private admin credentials.')
@@ -230,7 +239,8 @@ def checkout():
             expected = hmac.new(PRIVATE['secret'].encode(), (g.session['id'] + idem).encode(), hashlib.sha256).hexdigest()
             if not hmac.compare_digest(expected, signature):
                 abort(403)
-            order = store.create_order(raw, customer, delivery, values.get('payment_method', 'cod'), idem)
+            order = store.create_order(raw, customer, delivery, values.get('payment_method', 'cod'), idem,
+                                       expected=(q['currency'],q['total_minor']))
             queue_publish()
             if order['payment_method'] == 'card' and not order.get('checkout_url'):
                 try:

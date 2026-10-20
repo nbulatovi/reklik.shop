@@ -313,7 +313,7 @@ def release_expired():
         return len(expired)
 
 
-def create_order(raw, customer, delivery, method, idem, test=False):
+def create_order(raw, customer, delivery, method, idem, test=False, expected=None):
     if method not in ('cod', 'card', 'pickup'):
         raise ValueError('Izaberite način plaćanja.')
     cfg = settings()
@@ -330,6 +330,8 @@ def create_order(raw, customer, delivery, method, idem, test=False):
         if existing:
             return unpack(existing)
         q = quote(raw, delivery['country'], delivery['method'], delivery['courier'], cfg)
+        if expected and (q['currency'],q['total_minor']) != expected:
+            raise ValueError('Iznos je ažuriran. Proverite novi sažetak porudžbine i potvrdite ponovo.')
         for line in q['items']:
             result = c.execute('UPDATE products SET quantity=quantity-?,revision=revision+1 WHERE id=? AND quantity>=? AND active=1',
                                (line['qty'], line['id'], line['qty']))
@@ -371,8 +373,9 @@ def change_order_status(oid, status):
             raise ValueError('Poslata roba se vraća u inventar tek nakon prijema povrata. Kontaktirajte administratora.')
         held = row['stock_held']
         if status == 'cancelled' and held:
-            for line in json.loads(row['items']):
-                c.execute('UPDATE products SET quantity=quantity+?,revision=revision+1 WHERE id=?', (line['qty'], line['id']))
+            if not row['test_order']:
+                for line in json.loads(row['items']):
+                    c.execute('UPDATE products SET quantity=quantity+?,revision=revision+1 WHERE id=?', (line['qty'], line['id']))
             held = 0
         c.execute('UPDATE orders SET status=?,stock_held=? WHERE id=?', (status, held, oid))
     audit('order_status', oid, status)

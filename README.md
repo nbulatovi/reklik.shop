@@ -6,6 +6,8 @@ Serbian refurbished electronics storefront: complete crawlable HTML on GitHub Pa
 
 `reklik-server.service` serves the application on `127.0.0.1:4340`; `reklik-tunnel.service` provides an isolated HTTPS Cloudflare quick tunnel. The tunnel is separate from the existing GCC Help, Topkvote and Mayaki tunnels. On a tunnel restart its endpoint is automatically republished in `docs/backend.json`.
 
+The production server service sets `REKLIK_SECURE_COOKIES=1`: its loopback listener is exposed exclusively by the HTTPS tunnel, so external origin checks and partitioned Secure cookies use HTTPS even if cloudflared omits the forwarded scheme. Embedded browsers that block cookies receive a first-party window link before form entry.
+
 The GitHub Pages entry point is `/docs`. Checkout, confirmation and admin pages frame the PC application. Public category and product pages contain full HTML and JSON-LD outside frames so they remain crawlable. A frame keeps the storefront address in the browser; it does not conceal the underlying network endpoint.
 
 ```sh
@@ -30,7 +32,7 @@ Whop credentials are read at runtime from the existing `~/.secrets/electricians.
 
 ## Admin operation
 
-Use `/admin/` on the storefront. Inventory supports creating, editing, unpublishing and duplicating products; camera capture and gallery uploads work from phones. A published product needs a real photograph. New categories receive stable public URLs and are added to the sitemap automatically. Stock revisions prevent an old editing form from overwriting a newer sale.
+Use `/admin/` on the storefront. Inventory supports creating, editing, unpublishing and duplicating products; camera capture and gallery uploads work from phones. A published product needs a real photograph. The interfaces were exercised at 320, 390, 768 and 1440 CSS pixels; form fields use at least 16px text and 48px controls. Camera file selection and photo upload were exercised in mobile Chrome emulation; physical iPhone/Android camera hardware remains an operator check. New categories receive stable public URLs and are added to the sitemap automatically. Stock revisions prevent an old editing form from overwriting a newer sale.
 
 Prices are stored as EUR minor units. Changing the site currency converts the storefront using the editable EUR/RSD rate. Existing orders retain their original currency and total. Warranty prices and courier tariffs are entered in RSD and converted for an EUR storefront.
 
@@ -46,7 +48,7 @@ Buy now skips the cart. COD checkout is one guest page with no account or market
 
 Card orders reserve stock for 30 minutes. Expiry/cancellation releases stock once. A late payment with unavailable stock enters manual review and is never automatically fulfilled. Refunds are handled in the merchant dashboard; cancelling a paid order does not itself issue a refund. Never cancel shipped stock back onto the shelf before a return is received.
 
-The admin payment check creates a **real charge**, EUR 1.00 or RSD 120.00. It is explicitly labelled, contains no physical inventory and is not a sandbox. No charge occurs until the payer enters a real card and confirms the processor's payment. Sandbox/test card numbers must not be entered in this live checkout.
+The admin payment check creates a **real charge**, EUR 1.00 or RSD 120.00. It is explicitly labelled, contains no physical inventory and is not a sandbox. No charge occurs until the payer enters a real card and confirms the processor's payment. Sandbox/test card numbers must not be entered in this live checkout. The existing shared processor account currently displays “Nikola’s Electric”; the store does not rename that shared account. ReKlik checkout configurations disable adaptive currency conversion, accept cards only, limit each order to one purchase, and use the processor-required `WHOP*REKLIK SHOP` statement descriptor.
 
 ## International shipping
 

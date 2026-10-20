@@ -129,6 +129,13 @@ class StoreTests(unittest.TestCase):
         self.assertIn('Iznos je ažuriran',response.get_data(as_text=True))
         self.assertEqual(store.product(1)['quantity'],1)
 
+    def test_transaction_rechecks_accepted_price_before_reserving(self):
+        q=store.quote([{'id':1}])
+        with store.connect(True) as c:c.execute('UPDATE products SET price_cents=31000 WHERE id=1')
+        with self.assertRaises(ValueError):
+            store.create_order([{'id':1}],{}, {'country':'RS','method':'shipping','courier':'post-express'},'cod','race',expected=(q['currency'],q['total_minor']))
+        self.assertEqual(store.product(1)['quantity'],1)
+
     def test_embedded_cookie_probe_detects_missing_cookie(self):
         self.client.get('/admin/login/')
         self.assertTrue(self.client.get('/api/session').json['ready'])
@@ -301,6 +308,20 @@ class StoreTests(unittest.TestCase):
     def test_unpaid_card_cannot_be_dispatched(self):
         order=self.order(method='card')
         with self.assertRaises(ValueError):store.change_order_status(order['id'],'confirmed')
+
+    def test_confirmed_card_order_never_says_pay_on_delivery(self):
+        order=self.order(method='card')
+        with store.connect(True) as c:c.execute("UPDATE orders SET status='paid',payment_id='pay_test' WHERE id=?",(order['id'],))
+        store.change_order_status(order['id'],'confirmed')
+        html=self.client.get('/order/'+order['token']+'/').get_data(as_text=True)
+        self.assertIn('Vaša uplata je primljena',html)
+        self.assertNotIn('Plaćate prilikom isporuke',html)
+
+    def test_cancel_payment_test_does_not_touch_inventory(self):
+        order=payments.test_order()
+        with store.connect(True) as c:c.execute("UPDATE orders SET status='paid',payment_id='pay_test',stock_held=1 WHERE id=?",(order['id'],))
+        store.change_order_status(order['id'],'cancelled')
+        self.assertEqual(store.product(1)['quantity'],1)
 
     def test_refurbished_seo_and_xss(self):
         store.set_settings({'indexing_enabled':True})

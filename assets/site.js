@@ -173,7 +173,7 @@
       document.querySelectorAll('form button[type=submit],form button:not([type]),[data-order-submit]').forEach(button=>{button.disabled=true;});
     }).catch(()=>{});
     const origins = ['https://nbulatovi.github.io','https://reklik.shop','https://www.reklik.shop'];
-    const notify = () => { const data = {type:'reklik-height',height:Math.max(document.body.scrollHeight,document.documentElement.scrollHeight)+25}; origins.forEach(origin => parent.postMessage(data,origin)); const order = $('[data-order-token]'); if (order) origins.forEach(origin => parent.postMessage({type:'reklik-order',token:order.dataset.orderToken},origin)); };
+    const notify = () => { const data = {type:'reklik-height',height:Math.ceil(document.body.getBoundingClientRect().bottom+window.scrollY)+25}; origins.forEach(origin => parent.postMessage(data,origin)); const order = $('[data-order-token]'); if (order) origins.forEach(origin => parent.postMessage({type:'reklik-order',token:order.dataset.orderToken},origin)); };
     new ResizeObserver(notify).observe(document.body); window.addEventListener('load',notify);
   }
 })();
