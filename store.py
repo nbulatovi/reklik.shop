@@ -21,7 +21,7 @@ DB = STATE / 'store.sqlite3'
 DEFAULTS = {
     'brand': 'ReKlik.shop', 'currency': 'EUR', 'eur_rsd': '117.2',
     'phone': '+38163697007', 'email': 'support@phonerepairteam.com',
-    'pickup_address': 'Bulevar Mihaila Pupina 10z, YU Biznis centar, 11070 Novi Beograd, Srbija',
+    'pickup_address': '',
     'pickup_enabled': True, 'international_enabled': False,
     'shipping_days': '1–3 radna dana', 'handling_days': '1–2 radna dana',
     'warranty_rsd': {'1': 600, '2': 1200, '3': 1800},

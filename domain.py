@@ -5,6 +5,7 @@ import subprocess
 import time
 from concurrent.futures import ThreadPoolExecutor
 from urllib.request import urlopen
+from urllib.parse import urlparse
 import store
 
 DOMAIN='reklik.shop'
@@ -43,6 +44,15 @@ def state(phase,message):
 
 
 def read(url):
+    if urlparse(url).hostname in (DOMAIN,'www.'+DOMAIN):
+        # Check the configured origin with its real hostname/SNI and certificate.
+        # Recursive resolvers may retain Namecheap parking records during cutover.
+        result=subprocess.run(['curl','--fail','--silent','--show-error','--location','--max-time','12',
+                               '--proto','=https','--proto-redir','=https',
+                               '--resolve',DOMAIN+':443:185.199.108.153',
+                               '--resolve','www.'+DOMAIN+':443:185.199.108.153',url],
+                              capture_output=True,text=True,timeout=15,check=True)
+        return result.stdout
     with urlopen(url,timeout=12) as response:
         if response.status!=200:raise ValueError('Stranica još nije spremna.')
         return response.read().decode()
@@ -59,6 +69,7 @@ def healthy(indexed=False):
     if 'data-frame-kind="admin"' not in bodies['/admin/'] or 'data-frame-kind="checkout"' not in bodies['/checkout/']:
         raise ValueError('Administracija ili kupovina još nisu objavljene.')
     endpoint=json.loads(bodies['/backend.json'])['backend']
+    if 'footer-admin' not in read('https://www.'+DOMAIN+'/'):raise ValueError('www adresa još nije spremna.')
     if json.loads(read(endpoint+'/health')).get('ok') is not True:raise ValueError('Backend nije spreman.')
     if 'https://'+DOMAIN+'/kategorija/' not in bodies['/sitemap.xml']:raise ValueError('Mapa sajta nije spremna.')
     if indexed and ('Disallow: /\n' in bodies['/robots.txt'] or 'name="robots" content="noindex' in bodies['/']):

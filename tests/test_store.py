@@ -498,6 +498,7 @@ class StoreTests(unittest.TestCase):
         import domain
         origin='https://reklik.shop'
         bodies={origin+'/':'<body data-base=""><a class="footer-admin">Admin</a>',
+                'https://www.reklik.shop/':'<a class="footer-admin">Admin</a>',
                 origin+'/catalog.json':json.dumps({'products':[]}),
                 origin+'/backend.json':json.dumps({'backend':'https://qa.trycloudflare.com'}),
                 origin+'/admin/':'data-frame-kind="admin"',origin+'/checkout/':'data-frame-kind="checkout"',
