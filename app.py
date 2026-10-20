@@ -505,6 +505,10 @@ def save_product():
                     raise ValueError('Inventar se promenio dok ste uređivali uređaj (moguća nova porudžbina). Otvorite uređaj ponovo i proverite količinu.')
                 c.execute('''UPDATE products SET category_id=?,title=?,brand=?,price_cents=?,quantity=?,condition=?,
                   description=?,specs=?,images=?,weight_kg=?,active=?,updated_at=?,revision=revision+1 WHERE id=?''', values + (pid,))
+                task=c.execute("SELECT fields FROM product_ai WHERE product_id=? AND status='pending'",(pid,)).fetchone()
+                if task:
+                    fields=[name for name in json.loads(task['fields']) if f.get('auto_'+name)!='0']
+                    c.execute('UPDATE product_ai SET fields=? WHERE product_id=?',(json.dumps(fields),pid))
             else:
                 slug = store.slugify(title) + '-' + secrets.token_hex(2)
                 c.execute('''INSERT INTO products(category_id,title,brand,price_cents,quantity,condition,description,
@@ -512,8 +516,13 @@ def save_product():
                   values + (store.now(), slug))
                 pid = c.execute('SELECT last_insert_rowid()').fetchone()[0]
         store.audit('product_saved', pid)
+        import specifications
+        identity_changed=not existing or existing['title']!=title or existing['brand']!=f.get('brand','').strip()[:80]
+        if identity_changed or f.get('lookup_requested')=='1':
+            fields=[name for name in ('specs','description','category_id') if f.get('auto_'+name,'1' if name=='category_id' or not (specs if name=='specs' else desc) else '0')=='1']
+            specifications.queue_product(pid,fields)
         queue_publish()
-        return back_admin(message='Uređaj je sačuvan. Javne stranice se automatski objavljuju.')
+        return back_admin(message='Uređaj je sačuvan. Možete odmah uneti sledeći; AI dopunjava podatke u pozadini.' if identity_changed or f.get('lookup_requested')=='1' else 'Uređaj je sačuvan. Javne stranice se automatski objavljuju.')
     except (ValueError, KeyError, store.sqlite3.IntegrityError, ArithmeticError) as e:
         return back_admin(error=str(e))
 
@@ -657,6 +666,13 @@ def inventory_specifications():
     data=request.get_json(silent=True) or request.form
     try:return jsonify(specifications.start(data.get('model',''),data.get('brand','')))
     except ValueError as error:return jsonify(error=str(error)),422
+
+
+@app.route('/admin/inventory-status')
+@admin_only
+def inventory_ai_status():
+    import specifications
+    return jsonify(specifications.inventory_status())
 
 
 @app.route('/admin/specifications/<job>')

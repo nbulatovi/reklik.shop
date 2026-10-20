@@ -22,6 +22,7 @@ import store
 import app as web
 import payments
 import addresses
+import specifications
 
 
 class StoreTests(unittest.TestCase):
@@ -38,9 +39,11 @@ class StoreTests(unittest.TestCase):
         web.login_attempts.clear()
         self.client=web.app.test_client()
         self.publish=patch.object(web,'queue_publish');self.publish.start()
+        self.ai_worker=patch.object(specifications.WORKERS,'submit');self.ai_worker.start()
 
     def tearDown(self):
         self.publish.stop()
+        self.ai_worker.stop()
 
     def hidden(self,body,name):
         match=re.search(r'name="'+re.escape(name)+r'" value="([^"]*)"',body)
@@ -391,6 +394,105 @@ class StoreTests(unittest.TestCase):
         with patch.object(specifications.WORKERS,'submit') as submit:
             result=specifications.start('Latitude 5420','Dell')
         self.assertEqual(result['status'],'completed');submit.assert_not_called()
+
+    def ai_result(self):
+        return {'status':'completed','message':'Specifikacije su pronađene.','result':{
+            'specs':{'Ekran':'6,1 inča','Procesor':'Apple A15'},'description':'Opis iz dokumentacije proizvođača.',
+            'category_slug':'telefoni','notes':'','sources':[{'url':'https://www.apple.com/iphone/','title':'Apple'}]}}
+
+    def test_inventory_saves_without_waiting_and_enriches_after_navigation(self):
+        html=self.login()
+        data={'csrf':self.hidden(html,'csrf'),'title':'Apple iPhone 13','brand':'Apple','price':'250',
+              'quantity':'2','category_id':'1','specs':'','description':'','auto_specs':'1','auto_description':'1','auto_category_id':'1'}
+        response=self.client.post('/admin/product',data=data)
+        self.assertEqual(response.status_code,302)
+        with store.connect() as c:
+            task=dict(c.execute('SELECT * FROM product_ai').fetchone())
+        pid=task['product_id']
+        self.assertEqual(task['status'],'pending')
+        self.assertEqual(store.product(pid,admin=True)['specs'],{})
+        # The next-entry page and a second session do not control the worker.
+        self.client.get('/admin/')
+        result=self.ai_result();specifications.update(task['job_id'],'completed',{'result':result['result'],'message':result['message']})
+        product=store.product(pid,admin=True)
+        self.assertEqual(product['specs'],result['result']['specs'])
+        self.assertEqual(product['category_slug'],'telefoni')
+        self.assertEqual(product['price_cents'],25000);self.assertEqual(product['quantity'],2)
+        self.assertEqual(self.client.get('/admin/inventory-status').json[0]['status'],'completed')
+
+    def test_background_ai_preserves_manual_edits_and_order_stock(self):
+        specifications.queue_product(1,['specs','description','category_id'])
+        with store.connect(True) as c:
+            job=c.execute('SELECT job_id FROM product_ai WHERE product_id=1').fetchone()[0]
+            c.execute("UPDATE products SET description='Moj ručni opis',specs=?,price_cents=41000,quantity=0,revision=revision+1 WHERE id=1",(json.dumps({'RAM':'32 GB'}),))
+        specifications.finish_product(1,self.ai_result(),job)
+        product=store.product(1,admin=True)
+        self.assertEqual(product['description'],'Moj ručni opis');self.assertEqual(product['specs'],{'RAM':'32 GB'})
+        self.assertEqual(product['price_cents'],41000);self.assertEqual(product['quantity'],0)
+
+    def test_background_ai_does_not_overwrite_new_model_or_manual_fields(self):
+        specifications.queue_product(1,[])
+        with store.connect() as c:job=c.execute('SELECT job_id FROM product_ai').fetchone()[0]
+        specifications.finish_product(1,self.ai_result(),job)
+        self.assertEqual(store.product(1)['specs'],{'Procesor':'Core i5','Memorija':'16 GB'})
+        specifications.queue_product(1,['specs','description'])
+        with store.connect(True) as c:
+            job=c.execute('SELECT job_id FROM product_ai').fetchone()[0]
+            c.execute("UPDATE products SET title='Drugi model' WHERE id=1")
+        specifications.finish_product(1,self.ai_result(),job)
+        self.assertEqual(store.product(1)['description'],'Testirani uređaj')
+        with store.connect() as c:self.assertEqual(c.execute('SELECT status FROM product_ai').fetchone()[0],'cancelled')
+
+    def test_background_ai_cached_completion_and_restart_recovery(self):
+        data=self.ai_result()
+        with patch.object(specifications,'start',return_value=data):specifications.queue_product(1,['description'])
+        self.assertEqual(store.product(1)['description'],data['result']['description'])
+        specifications.queue_product(1,['specs'])
+        with store.connect() as c:old=c.execute('SELECT job_id FROM product_ai').fetchone()[0]
+        specifications.recover()
+        with store.connect() as c:
+            new=c.execute('SELECT job_id FROM product_ai').fetchone()[0]
+        self.assertNotEqual(old,new)
+        self.assertEqual(specifications.status(old)['status'],'failed')
+        specifications.update(new,'completed',data)
+        self.assertEqual(store.product(1)['specs'],data['result']['specs'])
+
+    def test_ai_inventory_status_is_private_and_admin_button_is_at_footer(self):
+        self.assertEqual(self.client.get('/admin/inventory-status').status_code,302)
+        html=self.client.get('/').get_data(as_text=True)
+        self.assertIn('footer-admin',html)
+        self.assertLess(html.index('data-product-grid'),html.index('footer-admin'))
+
+    def test_domain_does_not_cut_over_while_dns_points_to_parking(self):
+        import domain,publisher
+        before=store.settings()
+        with patch.object(domain,'dns_ready',return_value=False),patch.object(domain,'state'),patch.object(domain,'github') as github,patch.object(publisher,'publish') as publish:
+            self.assertFalse(domain.step())
+        github.assert_not_called();publish.assert_not_called()
+        self.assertEqual(store.settings(),before)
+
+    def test_domain_rejects_conflicting_dns_records(self):
+        import domain
+        cases=[({'192.64.119.23'},set(),set(),False),(domain.GITHUB_IPS,{'nbulatovi.github.io'},set(),True),
+               (domain.GITHUB_IPS,{'parkingpage.namecheap.com'},set(),False),
+               (domain.GITHUB_IPS,{'nbulatovi.github.io'},{'2001:db8::1'},False)]
+        for apex,www,ipv6,expected in cases:
+            with patch.object(domain,'records',side_effect=lambda host,kind:apex if kind=='A' else www if kind=='CNAME' else ipv6):
+                self.assertEqual(domain.dns_ready(),expected)
+
+    def test_domain_enables_indexing_only_after_https_and_live_checks(self):
+        import domain,publisher
+        pages={'cname':'reklik.shop','https_certificate':{'state':'pending'},'https_enforced':False}
+        with patch.object(domain,'dns_ready',return_value=True),patch.object(domain,'state'),patch.object(domain,'github',return_value=pages),patch.object(publisher,'publish'),patch.object(domain,'healthy') as healthy:
+            self.assertFalse(domain.step());healthy.assert_not_called()
+        self.assertEqual(store.settings()['site_url'],'https://reklik.shop')
+        self.assertFalse(store.settings()['indexing_enabled'])
+        pages.update(https_certificate={'state':'approved'},https_enforced=True)
+        with patch.object(domain,'dns_ready',return_value=True),patch.object(domain,'state'),patch.object(domain,'github',return_value=pages),patch.object(publisher,'publish'),patch.object(domain,'healthy') as healthy:
+            self.assertTrue(domain.step())
+        self.assertTrue(store.settings()['indexing_enabled'])
+        self.assertEqual(healthy.call_count,2)
+        healthy.assert_called_with(indexed=True)
 
     def test_homepage_browsing_precedes_marketing(self):
         html=self.client.get('/').get_data(as_text=True)

@@ -59,6 +59,83 @@ def update(job,status_name,data):
     with store.connect(True) as c:
         c.execute('UPDATE jobs SET status=?,output=?,finished_at=? WHERE id=?',
                   (status_name,json.dumps(data,ensure_ascii=False),store.now() if status_name in ('completed','failed') else None,job))
+    if status_name in ('completed','failed'):
+        with store.connect() as c:
+            products=[r['product_id'] for r in c.execute("SELECT product_id FROM product_ai WHERE job_id=? AND status='pending'",(job,))]
+        for pid in products:
+            finish_product(pid,dict(data,status=status_name),job)
+
+
+def finish_product(pid,data,job):
+    """Apply only unchanged automatic fields. Stock and commercial data are never touched."""
+    changed=False
+    with store.connect(True) as c:
+        task=c.execute("SELECT * FROM product_ai WHERE product_id=? AND status='pending' AND job_id IS ?",(pid,job)).fetchone()
+        product=c.execute('SELECT * FROM products WHERE id=?',(pid,)).fetchone()
+        if not task or not product:return
+        baseline=json.loads(task['baseline']);fields=json.loads(task['fields'])
+        if product['title']!=baseline['title'] or product['brand']!=baseline['brand']:
+            c.execute("UPDATE product_ai SET status='cancelled',message='Model je promenjen.',updated_at=? WHERE product_id=?",(store.now(),pid))
+            return
+        values={}
+        if data.get('status')=='completed' and data.get('result'):
+            result=data['result']
+            if 'specs' in fields and json.loads(product['specs'])==baseline['specs']:
+                values['specs']=json.dumps(result['specs'],ensure_ascii=False)
+            if 'description' in fields and product['description']==baseline['description']:
+                values['description']=result['description']
+            if 'category_id' in fields and product['category_id']==baseline['category_id']:
+                category=c.execute('SELECT id FROM categories WHERE slug=?',(result.get('category_slug',''),)).fetchone()
+                if category:values['category_id']=category['id']
+            values={k:v for k,v in values.items() if product[k]!=v}
+            if values:
+                c.execute('UPDATE products SET '+','.join(k+'=?' for k in values)+',updated_at=?,revision=revision+1 WHERE id=?',(*values.values(),store.now(),pid))
+                changed=True
+        c.execute('UPDATE product_ai SET status=?,message=?,updated_at=? WHERE product_id=?',
+                  (data.get('status','failed'),data.get('message','')[:1000],store.now(),pid))
+    if changed:
+        store.audit('product_ai_completed',pid)
+        from app import queue_publish
+        queue_publish()
+
+
+def queue_product(pid,fields):
+    """Persist the link before dispatch so navigating away cannot lose the enrichment."""
+    product=store.product(pid,admin=True)
+    if not product:return
+    baseline={k:product[k] for k in ('title','brand','specs','description','category_id')}
+    with store.connect(True) as c:
+        c.execute("INSERT INTO product_ai VALUES(?,NULL,'pending',?,?,'AI obrađuje podatke u pozadini.',?) ON CONFLICT(product_id) DO UPDATE SET job_id=NULL,status='pending',baseline=excluded.baseline,fields=excluded.fields,message=excluded.message,updated_at=excluded.updated_at",
+                  (pid,json.dumps(baseline,ensure_ascii=False),json.dumps(fields),store.now()))
+    dispatch_product(pid,baseline)
+
+
+def dispatch_product(pid,baseline):
+    try:
+        data=start(baseline['title'],baseline['brand'])
+        job=data.get('id')
+        with store.connect(True) as c:
+            c.execute("UPDATE product_ai SET job_id=? WHERE product_id=? AND status='pending' AND baseline=?",(job,pid,json.dumps(baseline,ensure_ascii=False)))
+        # Covers cached results and a worker finishing before the durable link is set.
+        if job:data=status(job) or data
+        if data['status'] in ('completed','failed'):finish_product(pid,data,job)
+    except Exception:
+        finish_product(pid,{'status':'failed','message':'Uređaj je sačuvan. AI nije dostupan; pokušajte ponovo kroz Uredi.'},None)
+
+
+def recover():
+    """Resume persisted inventory jobs after a service or PC restart."""
+    with store.connect(True) as c:
+        c.execute("UPDATE jobs SET status='failed',output=?,finished_at=? WHERE kind='specifications' AND status IN ('queued','running')",
+                  (json.dumps({'message':'Pretraga je prekinuta ponovnim pokretanjem servera.'}),store.now()))
+        tasks=[dict(r) for r in c.execute("SELECT * FROM product_ai WHERE status='pending'")]
+        c.execute("UPDATE product_ai SET job_id=NULL WHERE status='pending'")
+    for task in tasks:dispatch_product(task['product_id'],json.loads(task['baseline']))
+
+
+def inventory_status():
+    with store.connect() as c:
+        return [dict(r) for r in c.execute('SELECT product_id,status,message FROM product_ai')]
 
 
 def run(job,key,model,brand):

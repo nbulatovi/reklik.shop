@@ -31,7 +31,8 @@ with store.connect(True) as c:
 '''
     subprocess.run([PYTHON,'-c',fixture],cwd=ROOT,env=env,check=True)
     launcher='''
-import app,payments,store
+import app,payments,store,specifications
+specifications.WORKERS.submit=lambda *args:None
 from waitress import serve
 def fake_checkout(order,origin):
  with store.connect(True) as c:c.execute("UPDATE orders SET checkout_url='https://whop.com/checkout/ch_qa_stub/',plan_id='plan_qa' WHERE id=?",(order['id'],))

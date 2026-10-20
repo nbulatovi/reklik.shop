@@ -109,6 +109,10 @@ def init_db():
           PRIMARY KEY(product_id,visitor_hash));
         CREATE TABLE IF NOT EXISTS model_specs(
           cache_key TEXT PRIMARY KEY,result TEXT,updated_at INTEGER NOT NULL,job_id TEXT);
+        CREATE TABLE IF NOT EXISTS product_ai(
+          product_id INTEGER PRIMARY KEY REFERENCES products(id) ON DELETE CASCADE,
+          job_id TEXT, status TEXT NOT NULL, baseline TEXT NOT NULL, fields TEXT NOT NULL,
+          message TEXT NOT NULL DEFAULT '', updated_at INTEGER NOT NULL);
         ''')
         product_columns = {row['name'] for row in c.execute('PRAGMA table_info(products)')}
         if 'revision' not in product_columns:
@@ -193,7 +197,7 @@ def unpack(row):
 def products(admin=False, category=None, query=''):
     sql = 'SELECT p.*, c.name category_name,c.slug category_slug,c.icon FROM products p JOIN categories c ON c.id=p.category_id WHERE 1=1'
     if admin:
-        sql = sql.replace('SELECT p.*,','SELECT p.*, (SELECT count(*) FROM item_views v WHERE v.product_id=p.id) unique_views,',1)
+        sql = sql.replace('SELECT p.*,','SELECT p.*, (SELECT count(*) FROM item_views v WHERE v.product_id=p.id) unique_views, (SELECT status FROM product_ai a WHERE a.product_id=p.id) ai_status,',1)
     args = []
     if not admin:
         sql += ' AND p.active=1'

@@ -30,7 +30,7 @@ Image.new('RGB',(3200,2400),(190,193,198)).save(store.STATE/'camera-large.jpg')
 '''
     subprocess.run([PYTHON,'-c',fixture],cwd=ROOT,env=env,check=True)
     log = open(Path(state)/'server.log','w')
-    launcher='import app; from waitress import serve; app.queue_publish=lambda:None; serve(app.app,host="127.0.0.1",port=4341)'
+    launcher='import app, specifications; from waitress import serve; app.queue_publish=lambda:None; specifications.WORKERS.submit=lambda *args:None; serve(app.app,host="127.0.0.1",port=4341)'
     server = subprocess.Popen([PYTHON,'-c',launcher],cwd=ROOT,env=env,stdout=log,stderr=log)
     try:
         origin='http://127.0.0.1:4341'
@@ -167,9 +167,42 @@ Image.new('RGB',(3200,2400),(190,193,198)).save(store.STATE/'camera-large.jpg')
             page.wait_for_url('**/admin/?**')
             page.locator('.inventory-row').first.get_by_role('link',name='Uredi',exact=True).click()
             assert page.locator('[name=keep_images]').count()==2
+            # A slow lookup must not block saving or require this page to stay open.
+            page.goto(origin+'/admin/')
+            page.route('**/admin/specifications',lambda route:route.fulfill(json={'status':'queued','id':'slow-lookup'}))
+            page.route('**/admin/specifications/slow-lookup',lambda route:route.fulfill(json={'status':'running','message':'AI radi…'}))
+            page.locator('[name=brand]').fill('Apple')
+            page.locator('[name=title]').fill('iPhone 13 — pozadinska obrada')
+            page.locator('[name=price]').fill('210')
+            page.locator('input[capture=environment]').set_input_files(str(Path(state)/'camera.jpg'))
+            page.wait_for_function('() => document.querySelector("[data-staged-photos]").files.length===1')
+            page.wait_for_timeout(1400)
+            assert page.locator('[data-inventory-save]').is_enabled()
+            started=time.monotonic()
+            page.locator('[data-inventory-save]').click()
+            page.wait_for_url('**/admin/?**')
+            elapsed=time.monotonic()-started
+            assert elapsed<5,elapsed
+            assert page.locator('[name=title]').input_value()==''
+            row=page.locator('.inventory-row').filter(has_text='iPhone 13 — pozadinska obrada')
+            assert 'AI obrađuje podatke u pozadini' in row.inner_text()
+            completion='''
+import app,store,specifications
+app.queue_publish=lambda:None
+with store.connect() as c:
+ task=c.execute("SELECT a.* FROM product_ai a JOIN products p ON p.id=a.product_id WHERE p.title=?",('iPhone 13 — pozadinska obrada',)).fetchone()
+specifications.update(task['job_id'],'completed',{'message':'Gotovo','result':{'specs':{'Ekran':'6,1 inča','Procesor':'Apple A15'},'description':'Dopunjeno u pozadini.','category_slug':'telefoni','sources':[],'notes':''}})
+'''
+            subprocess.run([PYTHON,'-c',completion],cwd=ROOT,env=env,check=True)
+            page.wait_for_function('() => [...document.querySelectorAll(".inventory-row")].find(e=>e.textContent.includes("iPhone 13 — pozadinska obrada")).textContent.includes("AI podaci su spremni")')
+            row.get_by_role('link',name='Uredi',exact=True).click()
+            assert 'Apple A15' in page.locator('[name=specs]').input_value()
+            category_text=page.locator('[name=category_id] option:checked').text_content()
+            assert category_text=='Telefoni',(category_text,page.locator('form[data-inventory-form]').inner_text())
+            assert page.locator('[name=price]').input_value()=='210.00'
             assert not errors,errors
             browser.close()
-            print(json.dumps({'result':'passed','widths':[320,390,768,1440],'flows':['multiple camera uploads, removal and retake','in-page camera capture and stream release','inventory edit','reuse text','create category','COD village Cyrillic no street/postcode','AKS quote','phone-confirm order'],'javascript_errors':errors}))
+            print(json.dumps({'result':'passed','widths':[320,390,768,1440],'flows':['multiple camera uploads, removal and retake','in-page camera capture and stream release','inventory edit','reuse text','create category','COD village Cyrillic no street/postcode','AKS quote','phone-confirm order','save while AI running, then persistent background completion'],'background_save_seconds':round(elapsed,3),'javascript_errors':errors}))
     finally:
         server.terminate()
         server.wait(timeout=15)

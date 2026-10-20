@@ -260,34 +260,34 @@
   const inventory=$('[data-inventory-form]');
   if(inventory){
     const model=inventory.elements.title,brand=inventory.elements.brand,status=$('[data-spec-status]'),save=$('[data-inventory-save]');
-    let timer,version=0,original=brand.value.trim()+'|'+model.value.trim(),busy=false,editedSpecs=false,editedDescription=false;
-    inventory.elements.specs.addEventListener('input',()=>{editedSpecs=true;});
-    inventory.elements.description.addEventListener('input',()=>{editedDescription=true;});
+    let timer,version=0,original=brand.value.trim()+'|'+model.value.trim(),editedSpecs=false,editedDescription=false,editedCategory=false;
+    inventory.elements.specs.addEventListener('input',()=>{editedSpecs=true;inventory.elements.auto_specs.value='0';});
+    inventory.elements.description.addEventListener('input',()=>{editedDescription=true;inventory.elements.auto_description.value='0';});
+    inventory.elements.category_id.addEventListener('change',()=>{editedCategory=true;inventory.elements.auto_category_id.value='0';});
     const lookup=async(force=false)=>{
       const key=brand.value.trim()+'|'+model.value.trim();
-      if(model.value.trim().length<3||brand.value.trim().length<2){busy=false;save.disabled=false;return;}
-      if(!force&&key===original){busy=false;save.disabled=false;return;}
+      if(model.value.trim().length<3||brand.value.trim().length<2)return;
+      if(!force&&key===original)return;
+      inventory.elements.lookup_requested.value='1';
       const current=++version,previousSpecs=inventory.elements.specs.value,previousDescription=inventory.elements.description.value;
-      busy=true;save.disabled=true;status.textContent='Pronalazimo specifikacije i popunjavamo podatke…';
+      status.textContent='AI traži specifikacije u pozadini. Možete odmah sačuvati uređaj i uneti sledeći.';
       try{
         const response=await fetch('/admin/specifications',{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':inventory.elements.csrf.value},body:JSON.stringify({model:model.value.trim(),brand:brand.value.trim()})});
         let data=await response.json();if(!response.ok)throw Error(data.error||'Pretraga nije uspela.');
-        while(['queued','running'].includes(data.status)){await new Promise(resolve=>setTimeout(resolve,1800));if(current!==version)return;const poll=await fetch('/admin/specifications/'+encodeURIComponent(data.id),{cache:'no-store'});if(!poll.ok)throw Error('Veza sa pretragom je prekinuta. Pokušajte ponovo.');data=await poll.json();status.textContent=data.message||'Pronalazimo specifikacije…';}
+        while(['queued','running'].includes(data.status)){await new Promise(resolve=>setTimeout(resolve,1800));if(current!==version)return;const poll=await fetch('/admin/specifications/'+encodeURIComponent(data.id),{cache:'no-store'});if(!poll.ok)throw Error('Veza sa pretragom je prekinuta. Pokušajte ponovo.');data=await poll.json();status.textContent=(data.message||'Pronalazimo specifikacije…')+' Možete odmah sačuvati uređaj.';}
         if(current!==version)return;if(data.status!=='completed'||!data.result)throw Error(data.message||'Podaci nisu pronađeni.');
         const result=data.result;
         if(!editedSpecs&&inventory.elements.specs.value===previousSpecs)inventory.elements.specs.value=Object.entries(result.specs).map(([k,v])=>k+': '+v).join('\n');
         if(!editedDescription&&inventory.elements.description.value===previousDescription)inventory.elements.description.value=result.description;
-        const category=[...inventory.elements.category_id.options].find(option=>option.dataset.slug===result.category_slug);if(category)inventory.elements.category_id.value=category.value;
+        const category=[...inventory.elements.category_id.options].find(option=>option.dataset.slug===result.category_slug);if(category&&!editedCategory)inventory.elements.category_id.value=category.value;
         original=key;status.textContent='Specifikacije, opis i kategorija su popunjeni.'+(result.notes?' '+result.notes:'');
         const sources=$('[data-spec-sources]');sources.replaceChildren();for(const source of result.sources||[])sources.append(node('a',{href:source.url,target:'_blank',rel:'noopener noreferrer'},source.title||new URL(source.url).hostname));
       }catch(error){if(current===version)status.textContent=error.message+' Podatke možete dopuniti i u odeljku ispod.';}
-      finally{if(current===version){busy=false;save.disabled=false;}}
     };
-    const schedule=()=>{clearTimeout(timer);version++;if(model.value.trim().length>=3&&brand.value.trim().length>=2){busy=true;save.disabled=true;status.textContent='Pripremamo automatsko popunjavanje…';timer=setTimeout(()=>lookup(),1100);}else{busy=false;save.disabled=false;}};
+    const schedule=()=>{clearTimeout(timer);version++;if(model.value.trim().length>=3&&brand.value.trim().length>=2){status.textContent='Specifikacije se obrađuju u pozadini; čuvanje je odmah dostupno.';timer=setTimeout(()=>lookup(),1100);}};
     model.addEventListener('input',schedule);brand.addEventListener('input',schedule);
     $('[data-fetch-specs]').addEventListener('click',()=>{clearTimeout(timer);lookup(true);});
     inventory.addEventListener('submit',event=>{
-      if(busy){event.preventDefault();status.textContent='Sačekajte da se završi automatsko popunjavanje.';return;}
       if(inventory.dataset.photosBusy){event.preventDefault();$('[data-photo-status]').textContent='Sačekajte pripremu fotografija pre čuvanja.';return;}
       if(event.defaultPrevented)return;
       const bytes=[...inventory.querySelectorAll('input[type=file]')].reduce((n,input)=>n+[...input.files].reduce((s,file)=>s+file.size,0),0);
@@ -295,7 +295,20 @@
       if(inventory.dataset.submitting){event.preventDefault();return;}
       inventory.dataset.submitting='1';save.disabled=true;save.setAttribute('aria-busy','true');save.textContent='Čuvamo uređaj…';
     });
-    window.addEventListener('pageshow',event=>{if(event.persisted){delete inventory.dataset.submitting;save.disabled=busy;save.removeAttribute('aria-busy');save.textContent='Sačuvaj uređaj';}});
+    window.addEventListener('pageshow',event=>{if(event.persisted){delete inventory.dataset.submitting;save.disabled=false;save.removeAttribute('aria-busy');save.textContent='Sačuvaj uređaj';}});
+  }
+  if($('[data-product-ai][data-state="pending"]')){
+    const refresh=async()=>{
+      try{
+        const response=await fetch('/admin/inventory-status',{cache:'no-store'});if(!response.ok)return;
+        for(const task of await response.json()){
+          const label=$('[data-product-ai="'+task.product_id+'"]');if(!label)continue;
+          label.dataset.state=task.status;
+          label.textContent=task.status==='pending'?'AI obrađuje podatke u pozadini…':task.status==='completed'?'AI podaci su spremni.':task.status==='failed'?'AI nije dovršen. Otvorite Uredi → Ponovo pronađi specifikacije.':'';
+        }
+      }catch{}
+      if($('[data-product-ai][data-state="pending"]'))setTimeout(refresh,2500);
+    };setTimeout(refresh,2000);
   }
   if (aiForm) aiForm.addEventListener('submit', async e => {
     e.preventDefault(); const button = $('[data-ai-submit]'), status = $('[data-ai-status]'), log = $('[data-ai-log]');
