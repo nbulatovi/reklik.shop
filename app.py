@@ -24,6 +24,7 @@ import store
 import payments
 
 app = Flask(__name__, static_folder='assets', static_url_path='/assets')
+app.json.sort_keys = False
 register_heif_opener()
 app.config.update(MAX_CONTENT_LENGTH=35*1024*1024, TEMPLATES_AUTO_RELOAD=True)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1)

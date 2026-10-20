@@ -34,6 +34,12 @@ def validate(data):
             sources.append({'title':str(source.get('title',''))[:180],'url':parsed.geturl()[:1500]})
     specs={str(p.get('name','')).strip()[:60]:str(p.get('value','')).strip()[:300] for p in data.get('specs',[])[:20] if isinstance(p,dict) and p.get('name') and p.get('value')}
     if not sources or len(specs)<2:raise ValueError('Nije pronađeno dovoljno pouzdanih podataka proizvođača. Dopunite naziv modela ili unesite podatke ručno.')
+    def priority(pair):
+        name=store.fold(pair[0])
+        for rank,terms in enumerate([('procesor','cpu'),('ram','memorija'),('skladiste','ssd','kapacitet'),('ekran','display')]):
+            if any(term in name for term in terms):return rank
+        return 10
+    specs=dict(sorted(specs.items(),key=priority))
     return {'title':str(data.get('title',''))[:160],'brand':str(data.get('brand',''))[:80],
             'category_slug':str(data.get('category_slug',''))[:100],'description':str(data.get('description',''))[:3000],
             'notes':str(data.get('notes',''))[:1000],'specs':specs,'sources':sources}
