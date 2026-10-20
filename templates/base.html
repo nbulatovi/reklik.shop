@@ -7,9 +7,9 @@
 {% if private_page or not cfg.indexing_enabled %}<meta name="robots" content="noindex, nofollow">{% else %}<meta name="robots" content="index, follow, max-image-preview:large">{% endif %}
 <link rel="canonical" href="{{cfg.canonical_url}}{{current_path}}">
 <meta property="og:type" content="{% block ogtype %}website{% endblock %}"><meta property="og:title" content="{{page_title}} | {{cfg.brand}}"><meta property="og:description" content="Testirana tehnologija. Novi početak. Sertifikovano obnovljeni uređaji u ReKlik prodavnici."><meta property="og:url" content="{{cfg.canonical_url}}{{current_path}}"><meta property="og:image" content="{{cfg.canonical_url}}/assets/social-card.svg">
-<link rel="icon" href="{{base}}/assets/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="{{base}}/assets/style.css">
+<link rel="icon" href="{{base}}/assets/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="{{base}}/assets/style.css?v={{asset_version}}">
 {% block head %}{% endblock %}
-<script src="{{base}}/assets/site.js" defer></script>
+<script src="{{base}}/assets/site.js?v={{asset_version}}" defer></script>
 {% if not private_page %}<script type="application/ld+json">{{ {'@context':'https://schema.org','@type':'Store','name':cfg.brand,'url':cfg.canonical_url,'telephone':cfg.phone,'email':cfg.email,'address':{'@type':'PostalAddress','streetAddress':'Bulevar Mihaila Pupina 10z, YU Biznis centar','addressLocality':'Novi Beograd','postalCode':'11070','addressCountry':'RS'}}|tojson }}</script>{% endif %}
 </head><body class="{{'embedded' if embedded else ''}} {{'product-browser' if products is defined and not embedded else ''}}" data-base="{{base}}" data-live="{{'1' if live else '0'}}">
 <a class="skip-link" href="#main">Pređi na sadržaj</a>

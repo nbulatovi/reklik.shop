@@ -30,6 +30,12 @@ All live state is outside the repository in `~/.local/state/reklik/`:
 
 Whop credentials are read at runtime from the existing `~/.secrets/electricians.env` (override with `REKLIK_PAYMENT_ENV`). They are never placed in browser JavaScript, public HTML, Git or the AI workspace. Card numbers are entered only on Whop hosted checkout; this server never receives them.
 
+## Product browsing and examples
+
+The homepage opens directly onto a compact product catalogue with category navigation, header search, brand/price/availability filters and sorting. Marketing sections follow the catalogue. Eight illustrative laptop/phone examples are stored with `is_demo=1` and zero stock. They use original SVG illustrations, display explicit example labels and prices, have no buy/cart controls, and are rejected by server-side quoting. They are omitted from cart JSON, offer structured data and product sitemaps. Publishing the first real device automatically hides all examples from public listings; admin retains them as optional text templates. Examples can also be unpublished individually.
+
+Browser QA uses temporary state and explicitly disables publishing. It must never export its temporary catalogue into the live repository.
+
 ## Admin operation
 
 Use `/admin/` on the storefront. Inventory supports creating, editing, unpublishing and duplicating products; camera capture and gallery uploads work from phones. A published product needs a real photograph. The interfaces were exercised at 320, 390, 768 and 1440 CSS pixels; form fields use at least 16px text and 48px controls. Camera file selection and photo upload were exercised in mobile Chrome emulation; physical iPhone/Android camera hardware remains an operator check. New categories receive stable public URLs and are added to the sitemap automatically. Stock revisions prevent an old editing form from overwriting a newer sale.

@@ -107,6 +107,7 @@ def admin_only(fn):
 def template_context():
     cfg = store.settings()
     return {'cfg': cfg, 'categories': store.categories(), 'base': '', 'live': True,
+            'asset_version': str(max((store.ROOT/'assets/style.css').stat().st_mtime_ns,(store.ROOT/'assets/site.js').stat().st_mtime_ns)),
             'csrf': g.session['csrf'] if getattr(g, 'session', None) else '',
             'money': lambda cents: store.display_money(store.money_minor(cents, cfg), cfg['currency']),
             'minor_money': lambda cents: store.display_money(cents, cfg['currency']),
