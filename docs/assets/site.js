@@ -1,4 +1,4 @@
-/* ReKlik: progressively enhanced HTML. No analytics, ads, or third-party scripts. */
+/* ReKlik: progressively enhanced HTML. No ads or third-party analytics scripts. */
 (() => {
   'use strict';
   const base = document.body.dataset.base || '';
@@ -8,10 +8,20 @@
   const readCart = () => { try { const x = JSON.parse(localStorage.getItem('reklik-cart') || '[]'); return Array.isArray(x) ? x.slice(0, 30) : []; } catch { return []; } };
   const countCart = () => $$('[data-cart-count]').forEach(x => { x.textContent = readCart().reduce((n, v) => n + (Number(v.qty) || 0), 0); });
   const saveCart = items => { try { localStorage.setItem('reklik-cart', JSON.stringify(items)); } catch { /* Shopping still works with Buy now. */ } countCart(); };
-  const money = (minor, currency) => new Intl.NumberFormat('sr-Latn-RS', {style: 'currency', currency, minimumFractionDigits: currency === 'RSD' && minor % 100 === 0 ? 0 : 2, maximumFractionDigits: 2}).format(minor / 100);
+  const money = (minor, currency) => new Intl.NumberFormat('sr-Latn-RS', {style: 'currency', currency, minimumFractionDigits: minor % 100 === 0 ? 0 : 2, maximumFractionDigits: 2}).format(minor / 100);
   const node = (tag, attributes = {}, text = '') => { const e = document.createElement(tag); Object.entries(attributes).forEach(([k,v]) => e.setAttribute(k, v)); e.textContent = text; return e; };
   countCart();
   window.addEventListener('storage', countCart);
+
+  const viewedProduct = $('[data-product-view]');
+  if (viewedProduct) {
+    const record = origin => fetch(origin+'/views/product/'+encodeURIComponent(viewedProduct.dataset.productView),{mode:'no-cors',credentials:'omit',cache:'no-store',keepalive:true}).catch(()=>{});
+    if (live) record(location.origin);
+    else fetch(base+'/backend.json?t='+Date.now(),{cache:'no-store'}).then(r=>r.json()).then(data=>{
+      const backend=new URL(data.backend);
+      if(backend.protocol==='https:' && /^[a-z0-9-]+\.trycloudflare\.com$/.test(backend.hostname))record(backend.origin);
+    }).catch(()=>{});
+  }
 
   $$('[data-add-cart]').forEach(button => button.addEventListener('click', () => {
     const id = Number(button.dataset.addCart), warranty = Number($('#warranty')?.value || 0), items = readCart();
@@ -25,12 +35,25 @@
     img.src = button.dataset.thumbnail; img.parentElement.href = button.dataset.thumbnail;
   }));
 
+  const gallery=$('[data-gallery]');
+  if(gallery){
+    let urls=[];try{urls=JSON.parse(gallery.dataset.gallery);}catch{}
+    let position=0;
+    const show=index=>{if(!urls.length)return;position=(index+urls.length)%urls.length;$('[data-gallery-image]',gallery).src=urls[position];$('[data-gallery-position]',gallery).textContent=(position+1)+' / '+urls.length;$$('[data-gallery-go]',gallery).forEach(b=>b.setAttribute('aria-pressed',String(Number(b.dataset.galleryGo)===position)));};
+    $('[data-gallery-prev]',gallery)?.addEventListener('click',()=>show(position-1));
+    $('[data-gallery-next]',gallery)?.addEventListener('click',()=>show(position+1));
+    $$('[data-gallery-go]',gallery).forEach(b=>b.addEventListener('click',()=>show(Number(b.dataset.galleryGo))));
+    gallery.addEventListener('keydown',e=>{if(e.key==='ArrowLeft'||e.key==='ArrowRight'){e.preventDefault();show(position+(e.key==='ArrowLeft'?-1:1));}});
+    let start;gallery.addEventListener('touchstart',e=>{start=[e.touches[0].clientX,e.touches[0].clientY];},{passive:true});
+    gallery.addEventListener('touchend',e=>{if(!start)return;const x=e.changedTouches[0].clientX-start[0],y=e.changedTouches[0].clientY-start[1];if(Math.abs(x)>50&&Math.abs(x)>Math.abs(y)*1.5)show(position+(x>0?-1:1));start=null;},{passive:true});
+  }
+
   const fold = value => { const table = {'а':'a','б':'b','в':'v','г':'g','д':'d','ђ':'dj','е':'e','ж':'z','з':'z','и':'i','ј':'j','к':'k','л':'l','љ':'lj','м':'m','н':'n','њ':'nj','о':'o','п':'p','р':'r','с':'s','т':'t','ћ':'c','у':'u','ф':'f','х':'h','ц':'c','ч':'c','џ':'dz','ш':'s','đ':'dj'}; return [...String(value).toLowerCase()].map(c=>table[c]||c).join('').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/sh/g,'s').replace(/ch/g,'c').replace(/zh/g,'z'); };
   const search = $('[data-catalog-search]'), grid = $('[data-product-grid]');
   if (grid) {
     const cards = $$('.product-card', grid);
     const brand = $('[data-brand-filter]'), min = $('[data-price-min]'), max = $('[data-price-max]'), stock = $('[data-in-stock]');
-    const panel = $('[data-filter-panel]'), desktop = window.matchMedia('(min-width: 701px)');
+    const panel = $('[data-filter-panel]'), desktop = window.matchMedia('(min-width: 901px)');
     const layoutFilters = () => { if (panel) panel.open = desktop.matches; };
     layoutFilters(); desktop.addEventListener('change',layoutFilters);
     const filter = () => {
@@ -58,13 +81,15 @@
     filter();
   }
 
+  $('[data-category-select]')?.addEventListener('change',event=>{const target=new URL(event.target.value,location.origin);if(target.origin===location.origin)location.assign(target.href);});
+
   if ($('[data-cart-items]')) {
     fetch(base + '/catalog.json', {cache: 'no-store'}).then(r => { if (!r.ok) throw Error(); return r.json(); }).then(data => {
       const render = () => {
         const items = readCart(), host = $('[data-cart-items]'); host.replaceChildren(); let total = 0;
         items.forEach((line, index) => {
           const p = data.products.find(p => p.id === Number(line.id)); if (!p) return;
-          const row = node('article', {class: 'cart-item'}), img = node('img', {src: p.images.length ? base + '/media/' + p.images[0] : base + '/assets/favicon.svg', alt: p.title, width: '90', height: '80'});
+          const row = node('article', {class: 'cart-item'}), img = node('img', {src: p.images.length ? base + '/media/' + p.images[0] : p.catalog_image ? base+'/assets/'+p.catalog_image : base + '/assets/favicon.svg', alt: p.title, width: '90', height: '80'});
           const details = node('div'), title = node('h3'); title.append(node('a', {href: base + '/proizvod/' + p.slug + '/'}, p.title)); details.append(title);
           const qty = node('input', {type: 'number', min: '1', max: String(Math.max(1, Math.min(20,p.quantity))), value: String(line.qty), 'aria-label': 'Količina za ' + p.title});
           qty.addEventListener('change', () => { const next = readCart(); next[index].qty = Math.max(1, Math.min(20,Number(qty.value)||1)); saveCart(next); render(); });
@@ -82,7 +107,7 @@
         $('[data-cart-total]').textContent = money(total, data.currency);
         $('[data-cart-checkout]').href = base + '/checkout/?items=' + encodeURIComponent(JSON.stringify(items));
       }; render();
-    }).catch(() => { $('[data-cart-empty] p').textContent = 'Katalog trenutno nije dostupan. Osvežite stranicu ili koristite Kupi odmah uz uređaj.'; });
+    }).catch(() => { $('[data-cart-empty] p').textContent = 'Katalog trenutno nije dostupan. Osvežite stranicu ili koristite Kupi sada uz uređaj.'; });
   }
 
   const frameHost = $('[data-frame-kind]');
@@ -162,6 +187,37 @@
   }));
 
   const aiForm = $('[data-ai-form]');
+  const inventory=$('[data-inventory-form]');
+  if(inventory){
+    const model=inventory.elements.title,brand=inventory.elements.brand,status=$('[data-spec-status]'),save=$('[data-inventory-save]');
+    let timer,version=0,original=brand.value.trim()+'|'+model.value.trim(),busy=false,editedSpecs=false,editedDescription=false;
+    inventory.elements.specs.addEventListener('input',()=>{editedSpecs=true;});
+    inventory.elements.description.addEventListener('input',()=>{editedDescription=true;});
+    const lookup=async(force=false)=>{
+      const key=brand.value.trim()+'|'+model.value.trim();
+      if(model.value.trim().length<3||brand.value.trim().length<2){busy=false;save.disabled=false;return;}
+      if(!force&&key===original){busy=false;save.disabled=false;return;}
+      const current=++version,previousSpecs=inventory.elements.specs.value,previousDescription=inventory.elements.description.value;
+      busy=true;save.disabled=true;status.textContent='Pronalazimo specifikacije i popunjavamo podatke…';
+      try{
+        const response=await fetch('/admin/specifications',{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':inventory.elements.csrf.value},body:JSON.stringify({model:model.value.trim(),brand:brand.value.trim()})});
+        let data=await response.json();if(!response.ok)throw Error(data.error||'Pretraga nije uspela.');
+        while(['queued','running'].includes(data.status)){await new Promise(resolve=>setTimeout(resolve,1800));if(current!==version)return;const poll=await fetch('/admin/specifications/'+encodeURIComponent(data.id),{cache:'no-store'});if(!poll.ok)throw Error('Veza sa pretragom je prekinuta. Pokušajte ponovo.');data=await poll.json();status.textContent=data.message||'Pronalazimo specifikacije…';}
+        if(current!==version)return;if(data.status!=='completed'||!data.result)throw Error(data.message||'Podaci nisu pronađeni.');
+        const result=data.result;
+        if(!editedSpecs&&inventory.elements.specs.value===previousSpecs)inventory.elements.specs.value=Object.entries(result.specs).map(([k,v])=>k+': '+v).join('\n');
+        if(!editedDescription&&inventory.elements.description.value===previousDescription)inventory.elements.description.value=result.description;
+        const category=[...inventory.elements.category_id.options].find(option=>option.dataset.slug===result.category_slug);if(category)inventory.elements.category_id.value=category.value;
+        original=key;status.textContent='Specifikacije, opis i kategorija su popunjeni.'+(result.notes?' '+result.notes:'');
+        const sources=$('[data-spec-sources]');sources.replaceChildren();for(const source of result.sources||[])sources.append(node('a',{href:source.url,target:'_blank',rel:'noopener noreferrer'},source.title||new URL(source.url).hostname));
+      }catch(error){if(current===version)status.textContent=error.message+' Podatke možete dopuniti i u odeljku ispod.';}
+      finally{if(current===version){busy=false;save.disabled=false;}}
+    };
+    const schedule=()=>{clearTimeout(timer);version++;if(model.value.trim().length>=3&&brand.value.trim().length>=2){busy=true;save.disabled=true;status.textContent='Pripremamo automatsko popunjavanje…';timer=setTimeout(()=>lookup(),1100);}else{busy=false;save.disabled=false;}};
+    model.addEventListener('input',schedule);brand.addEventListener('input',schedule);
+    $('[data-fetch-specs]').addEventListener('click',()=>{clearTimeout(timer);lookup(true);});
+    inventory.addEventListener('submit',event=>{if(busy){event.preventDefault();status.textContent='Sačekajte da se završi automatsko popunjavanje.';}});
+  }
   if (aiForm) aiForm.addEventListener('submit', async e => {
     e.preventDefault(); const button = $('[data-ai-submit]'), status = $('[data-ai-status]'), log = $('[data-ai-log]');
     button.disabled = true; status.textContent = 'Pokrećemo uređivanje…'; log.hidden = false; log.textContent = '';

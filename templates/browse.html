@@ -1,15 +1,6 @@
 {% from 'macros.html' import icon, product_card with context %}
-<div class="container catalog-layout browse-layout" data-catalog-shell>
-<aside class="catalog-sidebar browse-sidebar">
-<div class="browse-categories"><h2>Kategorije</h2><a href="{{base}}/katalog/" class="{{'selected' if not category}}">Svi uređaji <small>{{products|length if not category else ''}}</small></a>{% for cat in categories %}<a href="{{base}}/kategorija/{{cat.slug}}/" class="{{'selected' if category and category.id == cat.id}}">{{icon(cat.icon,19)}}{{cat.name}}<small>{{cat.product_count}}</small></a>{% endfor %}</div>
-<details class="filter-panel" data-filter-panel><summary>{{icon('search',18)}} Filteri <span data-filter-count></span></summary><div class="filter-fields">
-<h2>Suzi izbor</h2><div class="field"><label for="brand-filter">Proizvođač</label><select id="brand-filter" data-brand-filter><option value="">Svi proizvođači</option>{% for brand in products|map(attribute='brand')|reject('equalto','')|unique|sort %}<option value="{{brand}}">{{brand}}</option>{% endfor %}</select></div>
-<fieldset class="budget-filter"><legend>Cena ({{cfg.currency}})</legend><div><label for="price-min">Od<input id="price-min" type="number" min="0" step="1" inputmode="numeric" data-price-min placeholder="0"></label><label for="price-max">Do<input id="price-max" type="number" min="0" step="1" inputmode="numeric" data-price-max placeholder="Bez limita"></label></div></fieldset>
-{% if products|rejectattr('is_demo')|list %}<label class="check-field"><input type="checkbox" data-in-stock> Samo dostupni uređaji</label>{% endif %}
-<button class="text-link filter-reset" type="button" data-reset-filters>Poništi filtere</button></div></details>
-</aside>
-<section class="catalog-results" aria-label="Pregled uređaja"><div class="catalog-tools"><span class="browse-title">{{category.name if category else 'Svi uređaji'}}</span><label class="sort-label"><span class="sr-only">Poređaj uređaje</span><select data-sort><option value="recent">Najnovije</option><option value="low">Cena: niža prvo</option><option value="high">Cena: viša prvo</option><option value="name">Naziv: A–Z</option></select></label></div>
-<div class="browse-meta"><p class="results-count"><span data-results-count>{{products|length}}</span> uređaja</p>{% if products and products[0].is_demo %}<p class="example-notice">Primeri ponude · ilustrativni modeli i cene, bez kupovine.</p>{% endif %}</div>
+<section class="product-stream" aria-label="Pregled uređaja">
 <div class="product-grid catalog-products" data-product-grid>{% for p in products %}{{product_card(p)}}{% endfor %}</div>
-<div class="empty-collection" data-empty {% if products %}hidden{% endif %}>{{icon(category.icon if category else 'laptop',54)}}<h2>Nema uređaja za ovaj izbor.</h2><p>Promenite pretragu ili filtere. Možete nam javiti i koji model tražite.</p><button class="button button-outline" type="button" data-reset-filters>Prikaži sve uređaje</button></div>
-</section></div>
+<div class="empty-collection" data-empty {% if products %}hidden{% endif %}>{{icon(category.icon if category else 'laptop',54)}}<h2>Nema uređaja za ovaj izbor.</h2><p>Promenite pretragu ili filtere.</p><button class="button button-outline" type="button" data-reset-filters>Prikaži sve uređaje</button></div>
+
+</section>

@@ -1,0 +1,3 @@
+{% from 'macros.html' import icon with context %}
+<header class="item-masthead"><a class="logo" href="{{base}}/">Re<span>Klik</span><i>.</i><small>shop</small></a><a class="item-phone" href="tel:{{cfg.phone}}">063 697 007</a>
+<form class="shop-search" action="{{base}}/katalog/" method="get" role="search">{{icon('search',18)}}<label class="sr-only" for="item-search">Pretraži uređaje</label><input id="item-search" type="search" name="q" placeholder="Pretraži uređaje…"><button aria-label="Pretraži">{{icon('arrow',18)}}</button></form><a class="item-back" href="{{base}}/katalog/">Svi uređaji</a><a class="cart-link" href="{{base}}/korpa/" aria-label="Otvori korpu">{{icon('bag',25)}}<span class="cart-count" data-cart-count>0</span></a></header>

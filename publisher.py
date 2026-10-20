@@ -22,9 +22,7 @@ def public_catalog(cfg=None):
     cfg = cfg or store.settings()
     rows = []
     for p in store.products():
-        if p['is_demo']:
-            continue
-        rows.append({key: p[key] for key in ['id','title','slug','brand','category_name','category_slug','condition','images','quantity']} |
+        rows.append({key: p[key] for key in ['id','title','slug','brand','category_name','category_slug','condition','images','quantity','catalog_image']} |
                     {'price_minor': store.money_minor(p['price_cents'], cfg)})
     return {'currency': cfg['currency'], 'products': rows,
             'warranty_minor': {str(n): store.rsd_to_minor(cfg['warranty_rsd'][str(n)], cfg) for n in (1,2,3)}}
@@ -61,10 +59,10 @@ def export():
         page('/kategorija/' + cat['slug'] + '/', 'catalog.html', products=store.products(category=cat['slug']), category=cat,
              query='', page_title=cat['name'] + ' — sertifikovano obnovljeno')
     for p in all_products:
-        page('/proizvod/' + p['slug'] + '/', 'product.html', product=p, page_title=p['title'],private_page=bool(p['is_demo']))
+        page('/proizvod/' + p['slug'] + '/', 'product.html', product=p, page_title=p['title'])
     titles = {'o-nama':'Nova prilika za odličnu tehnologiju','dostava':'Dostava i preuzimanje',
               'garancija':'Kvalitet, prava kupaca i dodatna garancija','uslovi':'Podaci o prodavcu i uslovi kupovine',
-              'privatnost':'Privatnost bez praćenja','povracaj':'Povraćaj i reklamacije','kontakt':'Tu smo za vas'}
+              'privatnost':'Privatnost i podaci','povracaj':'Povraćaj i reklamacije','kontakt':'Tu smo za vas'}
     for slug,title in titles.items():
         page('/' + slug + '/', 'information.html', info=slug, page_title=title)
     for path,kind,title in [('/checkout/','checkout','Sigurna kupovina'),('/admin/','admin','Administracija'),('/potvrda/','confirmation','Potvrda porudžbine')]:
@@ -114,7 +112,7 @@ def publish(push=True):
         if not (store.ROOT / '.git').exists():
             return {'pages': count, 'pushed': False}
         git('add','--','docs','assets','templates','app.py','store.py','payments.py','publisher.py',
-            'ai_editor.py','editor_guard.mjs','addresses.py','runtime.py','setup.py','requirements.txt','.gitignore','README.md','tests')
+            'ai_editor.py','editor_guard.mjs','specifications.py','specs_guard.mjs','addresses.py','runtime.py','setup.py','requirements.txt','.gitignore','README.md','tests')
         changed = git('diff','--cached','--quiet',check=False).returncode != 0
         if changed:
             git('commit','-m','Update ReKlik storefront and catalog')

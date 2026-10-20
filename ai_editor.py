@@ -71,7 +71,8 @@ You can edit templates, assets, and the existing app.py/store.py/payments.py/add
 Use read-only shell commands for inspection and apply_patch for changes. Do not change infrastructure or tests.
 Never read or print credentials. Customer data and production inventory are not mounted.
 Preserve payment verification, stock transactions, admin authentication, CSRF, free-text Serbian addresses,
-no trackers, minimal JavaScript, international OFF default, clear statutory rights, and mobile accessibility.
+no advertising or third-party trackers, preserve first-party unique-IP item counts, minimal JavaScript,
+international OFF default, clear statutory rights, and mobile accessibility.
 Use Serbian Latin customer text. Keep text and controls comfortably readable. Do not invent stock, reviews or claims.
 The trusted host will test your code and publish only after successful validation.
 Request: ''' + prompt

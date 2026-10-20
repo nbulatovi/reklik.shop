@@ -30,11 +30,21 @@ All live state is outside the repository in `~/.local/state/reklik/`:
 
 Whop credentials are read at runtime from the existing `~/.secrets/electricians.env` (override with `REKLIK_PAYMENT_ENV`). They are never placed in browser JavaScript, public HTML, Git or the AI workspace. Card numbers are entered only on Whop hosted checkout; this server never receives them.
 
-## Product browsing and examples
+## Product browsing and item pages
 
-The homepage opens directly onto a compact product catalogue with category navigation, header search, brand/price/availability filters and sorting. Marketing sections follow the catalogue. Eight illustrative laptop/phone examples are stored with `is_demo=1` and zero stock. They use original SVG illustrations, display explicit example labels and prices, have no buy/cart controls, and are rejected by server-side quoting. They are omitted from cart JSON, offer structured data and product sitemaps. Publishing the first real device automatically hides all examples from public listings; admin retains them as optional text templates. Examples can also be unpublished individually.
+Desktop browsing puts brand, large contact number, search, categories and filters in a side rail; products begin near the top edge. Mobile uses a compact two-column header and floating filter control. Product pages show a photo carousel, main specifications, price, Buy now and Add to cart together. Mobile purchase controls stay fixed at the bottom. Whole-number prices omit zero decimals while genuine fractional amounts remain exact.
+
+The current eight inventory entries are temporary fixtures requested by the owner for testing the full shopping flow. They are ordinary saleable stock, without special example labels or checkout restrictions. Card checkout is live and charges the shown amount if confirmed; replace/unpublish these fixtures before the intended commercial launch. Indexing remains off pending the domain cutover.
 
 Browser QA uses temporary state and explicitly disables publishing. It must never export its temporary catalogue into the live repository.
+
+## Item view statistics
+
+Opening an individual item page makes a cookieless request to the PC backend. Admin shows distinct IP counts per item across all time. The database stores a product-specific keyed HMAC of the normalized address and first-seen time, never a raw IP for this counter. Cloudflare's connecting-IP header supplies the address; IPv4-mapped IPv6 forms normalize together. Repeat visits cannot increment the item twice. Known crawler user agents are excluded. A shared IP counts once; an IP change counts separately. Counts are private, excluded from public catalogue JSON, and removed with product deletion. Privacy text describes this first-party feature; no third-party analytics service is used.
+
+## Automatic inventory specifications
+
+The first fields are photos, brand, model and price. Brand/model changes trigger authenticated Codex CLI manufacturer research and fill specifications, description and category. Advanced inputs remain editable; explicit manual edits are preserved. Results include primary manufacturer links and are cached for 30 days. Model-family variants are identified rather than inventing a unit's RAM/storage/configuration. The research worker uses separate CLI state, Bubblewrap, a web-only trusted hook, schema-constrained output and no access to production inventory, orders or payment secrets. A live Dell Latitude 5420 research job passed and returned Dell support documents. No API key is copied to the browser.
 
 ## Admin operation
 

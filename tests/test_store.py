@@ -27,7 +27,7 @@ import addresses
 class StoreTests(unittest.TestCase):
     def setUp(self):
         with store.connect(True) as c:
-            for table in ['orders','products','settings','sessions','jobs','audit']:
+            for table in ['orders','products','settings','sessions','model_specs','jobs','audit']:
                 c.execute('DELETE FROM '+table)
             c.execute('DELETE FROM categories WHERE id>4')
             c.execute("UPDATE categories SET shipping_overrides='{}',weight_kg=5 WHERE id=1")
@@ -335,27 +335,62 @@ class StoreTests(unittest.TestCase):
         for query in ['Čačak','Cacak','Чачак','Chachak']:
             self.assertEqual(len(store.products(query=query)),1,query)
 
-    def test_examples_are_blocked_from_orders_and_cart_feed(self):
-        with store.connect(True) as c:c.execute('UPDATE products SET is_demo=1,quantity=10 WHERE id=1')
-        with self.assertRaisesRegex(ValueError,'primer'):
-            store.quote([{'id':1}])
-        self.assertEqual(self.client.get('/catalog.json').json['products'],[])
-        html=self.client.get('/proizvod/test-thinkpad/').get_data(as_text=True)
-        self.assertIn('Ovo je primer',html)
-        self.assertNotIn('class="buy-form"',html)
-        self.assertNotIn('data-add-cart=',html)
-        self.assertNotIn('"@type": "Offer"',html)
-        self.assertIn('noindex',html)
+    def test_whole_prices_drop_zero_decimals_but_keep_real_cents(self):
+        self.assertEqual(store.display_money(34900,'EUR'),'349 €')
+        self.assertEqual(store.display_money(34950,'EUR'),'349,50 €')
+        self.assertEqual(store.display_money(239880,'RSD'),'2.398,80 RSD')
 
-    def test_examples_hide_as_soon_as_real_stock_is_published(self):
-        with store.connect(True) as c:
-            c.execute('''INSERT INTO products(category_id,title,slug,brand,price_cents,quantity,active,is_demo,created_at,updated_at)
-              VALUES(1,'Example laptop','example-laptop','Lenovo',20000,0,1,1,?,?)''',(store.now(),store.now()))
-        self.assertEqual(len(store.products()),1)
-        self.assertIsNone(store.product('example-laptop'))
-        self.assertEqual(len(store.products(admin=True)),2)
-        with store.connect(True) as c:c.execute('UPDATE products SET active=0 WHERE id=1')
-        self.assertEqual(store.products()[0]['slug'],'example-laptop')
+    def test_item_views_are_unique_per_ip_and_product(self):
+        first={'CF-Connecting-IP':'203.0.113.7','User-Agent':'Mozilla/5.0'}
+        second={'CF-Connecting-IP':'203.0.113.8','User-Agent':'Mozilla/5.0'}
+        for _ in range(3):
+            response=self.client.get('/views/product/1',headers=first)
+            self.assertEqual(response.status_code,204)
+            self.assertNotIn('Set-Cookie',response.headers)
+            self.assertEqual(response.headers['Cache-Control'],'no-store')
+        self.client.get('/views/product/1',headers=second)
+        self.assertEqual(store.products(admin=True)[0]['unique_views'],2)
+        with store.connect() as c:
+            records=[dict(row) for row in c.execute('SELECT * FROM item_views')]
+        self.assertEqual(len(records),2)
+        self.assertTrue(all(len(r['visitor_hash'])==64 for r in records))
+        self.assertNotIn('203.0.113',json.dumps(records))
+        self.assertNotIn('unique_views',self.client.get('/catalog.json').get_data(as_text=True))
+
+    def test_item_views_normalize_ips_and_ignore_bots(self):
+        for address in ['192.0.2.9','::ffff:192.0.2.9']:
+            self.client.get('/views/product/1',headers={'CF-Connecting-IP':address,'User-Agent':'Mozilla/5.0'})
+        self.client.get('/views/product/1',headers={'CF-Connecting-IP':'192.0.2.10','User-Agent':'Googlebot'})
+        self.client.get('/views/product/1',headers={'CF-Connecting-IP':'invalid','User-Agent':'Mozilla/5.0'})
+        self.assertEqual(store.products(admin=True)[0]['unique_views'],1)
+        self.assertEqual(self.client.get('/views/product/9999').status_code,404)
+
+    def test_inventory_specifications_require_admin_and_csrf(self):
+        import specifications
+        self.assertEqual(self.client.post('/admin/specifications',json={'model':'T14'}).status_code,403)
+        html=self.login();csrf=self.hidden(html,'csrf')
+        with patch.object(specifications,'start',return_value={'status':'completed','result':{'specs':{'Ekran':'14 inča'}}}) as start:
+            result=self.client.post('/admin/specifications',json={'model':'T14','brand':'Lenovo'},headers={'X-CSRF-Token':csrf})
+        self.assertEqual(result.status_code,200)
+        start.assert_called_once_with('T14','Lenovo')
+
+    def test_specification_results_require_official_sources(self):
+        import specifications
+        data={'title':'ThinkPad T14','brand':'Lenovo','description':'Opis','category_slug':'laptopovi','notes':'',
+          'specs':[{'name':'Ekran','value':'14 inča'},{'name':'RAM','value':'16 GB'}],
+          'sources':[{'title':'Source','url':'https://untrusted.example/specs'}]}
+        with self.assertRaises(ValueError):specifications.validate(data)
+        data['sources'][0]['url']='https://psref.lenovo.com/Product/ThinkPad/ThinkPad_T14_Gen_2_Intel'
+        result=specifications.validate(data)
+        self.assertEqual(result['specs']['RAM'],'16 GB')
+
+    def test_specs_cache_prevents_repeated_cli_jobs(self):
+        import specifications,hashlib
+        key=hashlib.sha256((store.fold('Dell')+'|'+store.fold('Latitude 5420')).encode()).hexdigest()
+        with store.connect(True) as c:c.execute('INSERT INTO model_specs VALUES(?,?,?,NULL)',(key,json.dumps({'specs':{'Ekran':'14 inča'}}),store.now()))
+        with patch.object(specifications.WORKERS,'submit') as submit:
+            result=specifications.start('Latitude 5420','Dell')
+        self.assertEqual(result['status'],'completed');submit.assert_not_called()
 
     def test_homepage_browsing_precedes_marketing(self):
         html=self.client.get('/').get_data(as_text=True)

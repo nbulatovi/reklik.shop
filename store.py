@@ -103,12 +103,16 @@ def init_db():
         CREATE TABLE IF NOT EXISTS jobs(
           id TEXT PRIMARY KEY, kind TEXT NOT NULL, status TEXT NOT NULL,
           output TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, finished_at INTEGER);
+        CREATE TABLE IF NOT EXISTS item_views(
+          product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+          visitor_hash TEXT NOT NULL, first_seen INTEGER NOT NULL,
+          PRIMARY KEY(product_id,visitor_hash));
+        CREATE TABLE IF NOT EXISTS model_specs(
+          cache_key TEXT PRIMARY KEY,result TEXT,updated_at INTEGER NOT NULL,job_id TEXT);
         ''')
         product_columns = {row['name'] for row in c.execute('PRAGMA table_info(products)')}
         if 'revision' not in product_columns:
             c.execute('ALTER TABLE products ADD COLUMN revision INTEGER NOT NULL DEFAULT 1')
-        if 'is_demo' not in product_columns:
-            c.execute('ALTER TABLE products ADD COLUMN is_demo INTEGER NOT NULL DEFAULT 0')
         category_columns = {row['name'] for row in c.execute('PRAGMA table_info(categories)')}
         if 'shipping_overrides' not in category_columns:
             c.execute("ALTER TABLE categories ADD COLUMN shipping_overrides TEXT NOT NULL DEFAULT '{}'")
@@ -165,8 +169,7 @@ def fold(value):
 def categories():
     with connect() as c:
         rows = [dict(r) for r in c.execute('''SELECT c.*, (SELECT count(*) FROM products p
-          WHERE p.category_id=c.id AND p.active=1 AND (p.quantity>0 OR p.is_demo=1)
-          AND (p.is_demo=0 OR NOT EXISTS(SELECT 1 FROM products WHERE active=1 AND is_demo=0))) product_count
+          WHERE p.category_id=c.id AND p.active=1 AND p.quantity>0) product_count
           FROM categories c ORDER BY sort_order,name''')]
     for row in rows:
         row['shipping_overrides'] = json.loads(row['shipping_overrides'])
@@ -180,17 +183,20 @@ def unpack(row):
     for k in ['specs', 'images', 'items', 'customer', 'delivery', 'shipping_overrides']:
         if k in row:
             row[k] = json.loads(row[k])
-    if 'is_demo' in row:
+    if 'slug' in row and 'price_cents' in row:
         illustration = row['slug'] + '.svg'
-        row['example_image'] = illustration if row['is_demo'] and (ROOT / 'assets' / illustration).is_file() else None
+        row['catalog_image'] = illustration if (ROOT / 'assets' / illustration).is_file() else None
+        row['catalog_images'] = [name for name in [illustration,row['slug']+'-2.svg',row['slug']+'-3.svg'] if (ROOT/'assets'/name).is_file()]
     return row
 
 
 def products(admin=False, category=None, query=''):
     sql = 'SELECT p.*, c.name category_name,c.slug category_slug,c.icon FROM products p JOIN categories c ON c.id=p.category_id WHERE 1=1'
+    if admin:
+        sql = sql.replace('SELECT p.*,','SELECT p.*, (SELECT count(*) FROM item_views v WHERE v.product_id=p.id) unique_views,',1)
     args = []
     if not admin:
-        sql += ' AND p.active=1 AND (p.is_demo=0 OR NOT EXISTS(SELECT 1 FROM products WHERE active=1 AND is_demo=0))'
+        sql += ' AND p.active=1'
     if category:
         sql += ' AND c.slug=?'
         args.append(category)
@@ -208,10 +214,6 @@ def product(identity, admin=False):
           c.weight_kg category_weight,c.international_multiplier,c.shipping_overrides FROM products p
           JOIN categories c ON c.id=p.category_id WHERE p.id=? OR p.slug=?''', (identity, identity)).fetchone()
     p = unpack(row)
-    if p and not admin and p['is_demo']:
-        with connect() as c:
-            if c.execute('SELECT 1 FROM products WHERE active=1 AND is_demo=0 LIMIT 1').fetchone():
-                return None
     return p if p and (admin or p['active']) else None
 
 
@@ -236,7 +238,8 @@ def display_money(minor, currency='EUR'):
         if int(minor) % 100:
             return f'{amount:,.2f}'.replace(',', '_').replace('.', ',').replace('_','.') + ' RSD'
         return f'{amount:,.0f}'.replace(',', '.') + ' RSD'
-    return f'{amount:,.2f}'.replace(',', ' ').replace('.', ',') + ' €'
+    decimals = 2 if int(minor) % 100 else 0
+    return f'{amount:,.{decimals}f}'.replace(',', ' ').replace('.', ',') + ' €'
 
 
 def normalize_items(raw):
@@ -273,8 +276,6 @@ def quote(raw, country='RS', delivery='shipping', courier='post-express', cfg=No
     for item in raw:
         p = product(item['id'])
         product_quantities[item['id']] = product_quantities.get(item['id'], 0) + item['qty']
-        if p and p['is_demo']:
-            raise ValueError('Ovo je primer prikaza uređaja i nije dostupan za kupovinu.')
         if not p or p['quantity'] < product_quantities[item['id']]:
             raise ValueError('Uređaj više nije dostupan u izabranoj količini. Osvežite porudžbinu.')
         unit = money_minor(p['price_cents'], cfg)

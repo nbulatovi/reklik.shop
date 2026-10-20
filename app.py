@@ -2,6 +2,7 @@ import csv
 import hashlib
 import hmac
 import io
+import ipaddress
 import json
 import os
 import re
@@ -46,6 +47,7 @@ country_codes = {code for code, name in countries}
 
 app.jinja_env.filters['truncate_specs'] = lambda values: ' · '.join(str(v) for v in values[:3])
 app.jinja_env.filters['image_urls'] = lambda values, origin: [origin + '/media/' + x for x in values]
+app.jinja_env.filters['asset_urls'] = lambda values, origin: [origin + '/assets/' + x for x in values]
 app.jinja_env.filters['converted_price'] = lambda cents, cfg: f'{store.money_minor(cents, cfg) / 100:.2f}'
 app.jinja_env.filters['order_money'] = store.display_money
 
@@ -58,7 +60,7 @@ def queue_publish():
 @app.before_request
 def load_session():
     g.session = None
-    if request.path.startswith(('/assets/', '/media/', '/health', '/webhooks/')):
+    if request.path.startswith(('/assets/', '/media/', '/health', '/webhooks/', '/views/')):
         return
     sid = request.cookies.get('rk_session', '')
     with store.connect(True) as c:
@@ -84,7 +86,7 @@ def response_headers(response):
     response.headers['Referrer-Policy'] = 'same-origin'
     response.headers['Permissions-Policy'] = 'camera=(self), microphone=(), geolocation=()'
     response.headers['Content-Security-Policy'] = "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-src https://whop.com https://*.whop.com; frame-ancestors 'self' https://nbulatovi.github.io https://reklik.shop https://www.reklik.shop; object-src 'none'; base-uri 'self'; form-action 'self' https://whop.com https://nbulatovi.github.io https://reklik.shop https://www.reklik.shop"
-    if request.path.startswith(('/admin', '/checkout', '/order', '/api/')):
+    if request.path.startswith(('/admin', '/checkout', '/order', '/api/', '/views/')):
         response.headers['Cache-Control'] = 'no-store'
         response.headers['X-Robots-Tag'] = 'noindex, nofollow'
     if getattr(g, 'session', None):
@@ -117,7 +119,7 @@ def template_context():
 
 @app.route('/health')
 def health():
-    return jsonify(ok=True, service='reklik', inventory_count=sum(not p['is_demo'] for p in store.products()))
+    return jsonify(ok=True, service='reklik', inventory_count=len(store.products()))
 
 
 @app.route('/')
@@ -155,14 +157,35 @@ def product(slug):
     p = store.product(slug)
     if not p:
         abort(404)
-    return render_template('product.html', product=p, page_title=p['title'], private_page=bool(p['is_demo']))
+    return render_template('product.html', product=p, page_title=p['title'])
+
+
+@app.route('/views/product/<int:pid>')
+def count_item_view(pid):
+    # Called only when an item detail page opens; no cookie or raw-IP record.
+    p = store.product(pid)
+    if not p:
+        return '',404
+    if re.search(r'bot|spider|crawler|preview',request.headers.get('User-Agent',''),re.I):
+        return '',204
+    raw_ip = request.headers.get('CF-Connecting-IPv6') or request.headers.get('CF-Connecting-IP') or request.remote_addr
+    try:
+        address = ipaddress.ip_address(raw_ip)
+        if isinstance(address,ipaddress.IPv6Address) and address.ipv4_mapped:
+            address = address.ipv4_mapped
+    except ValueError:
+        return '',204
+    visitor = hmac.new(PRIVATE['secret'].encode(),('item-view:'+str(pid)+':'+str(address)).encode(),hashlib.sha256).hexdigest()
+    with store.connect(True) as c:
+        c.execute('INSERT OR IGNORE INTO item_views(product_id,visitor_hash,first_seen) VALUES(?,?,?)',(pid,visitor,store.now()))
+    return '',204
 
 
 @app.route('/<page>/')
 def information(page):
     titles = {'o-nama': 'Nova prilika za odličnu tehnologiju', 'dostava': 'Dostava i preuzimanje',
               'garancija': 'Kvalitet, prava kupaca i dodatna garancija', 'uslovi': 'Podaci o prodavcu i uslovi kupovine',
-              'privatnost': 'Privatnost bez praćenja', 'povracaj': 'Povraćaj i reklamacije', 'kontakt': 'Tu smo za vas'}
+              'privatnost': 'Privatnost i podaci', 'povracaj': 'Povraćaj i reklamacije', 'kontakt': 'Tu smo za vas'}
     if page not in titles:
         abort(404)
     return render_template('information.html', info=page, page_title=titles[page])
@@ -409,7 +432,7 @@ def admin_dashboard():
             selected = dict(selected, id='', slug='', quantity=1, images=[])
     with store.connect() as c:
         orders = [store.unpack(r) for r in c.execute('SELECT * FROM orders ORDER BY created_at DESC LIMIT 100')]
-        jobs = [dict(r) for r in c.execute('SELECT * FROM jobs ORDER BY created_at DESC LIMIT 5')]
+        jobs = [dict(r) for r in c.execute("SELECT * FROM jobs WHERE kind!='specifications' ORDER BY created_at DESC LIMIT 5")]
     return render_template('admin.html', products=store.products(admin=True), selected=selected, orders=orders,
                            jobs=jobs, tab=tab, message=request.args.get('message', ''), error=request.args.get('error', ''),
                            page_title='ReKlik administracija', private_page=True)
@@ -462,10 +485,9 @@ def save_product():
         if not 0 <= weight <= 100:
             raise ValueError('Težina mora biti između 0 i 100 kg.')
         active = int(f.get('active') == 'yes')
-        is_demo = int(f.get('is_demo') == 'yes')
-        if is_demo:
-            quantity = 0
-        if active and not images and not is_demo:
+        pid = int(f.get('id') or 0)
+        existing = store.product(pid,admin=True) if pid else None
+        if active and not images and not (existing and existing['catalog_image']):
             raise ValueError('Dodajte bar jednu stvarnu fotografiju pre objavljivanja uređaja.')
         pid = int(f.get('id') or 0)
         with store.connect(True) as c:
@@ -488,7 +510,6 @@ def save_product():
                   specs,images,weight_kg,active,updated_at,created_at,slug) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
                   values + (store.now(), slug))
                 pid = c.execute('SELECT last_insert_rowid()').fetchone()[0]
-            c.execute('UPDATE products SET is_demo=? WHERE id=?',(is_demo,pid))
         store.audit('product_saved', pid)
         queue_publish()
         return back_admin(message='Uređaj je sačuvan. Javne stranice se automatski objavljuju.')
@@ -626,6 +647,24 @@ def ai_start():
         return jsonify(id=job)
     except ValueError as e:
         return jsonify(error=str(e)), 409
+
+
+@app.route('/admin/specifications',methods=['POST'])
+@admin_only
+def inventory_specifications():
+    import specifications
+    data=request.get_json(silent=True) or request.form
+    try:return jsonify(specifications.start(data.get('model',''),data.get('brand','')))
+    except ValueError as error:return jsonify(error=str(error)),422
+
+
+@app.route('/admin/specifications/<job>')
+@admin_only
+def inventory_specification_status(job):
+    import specifications
+    result=specifications.status(job)
+    if not result:abort(404)
+    return jsonify(result)
 
 
 @app.route('/admin/ai/<job>')

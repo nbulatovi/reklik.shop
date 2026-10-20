@@ -1,3 +1,2 @@
 {% extends 'base.html' %}{% from 'macros.html' import icon, product_card with context %}
-{% block content %}<div class="container page-top"><nav class="breadcrumb"><a href="{{base}}/">Početna</a><span>/</span><a href="{{base}}/katalog/">Katalog</a>{% if category %}<span>/</span>{{category.name}}{% endif %}</nav><span class="eyebrow">SERTIFIKOVANO OBNOVLJENO</span><h1>{{category.name if category else 'Odlična tehnologija. Bolji izbor.'}}</h1><p>{{category.description if category and category.description else 'Testirani uređaji, jasno opisano stanje i stvarne fotografije. Pronađite model koji odgovara vašem danu.'}}</p></div>
-{% include 'browse.html' %}{% endblock %}
+{% block content %}<h1 class="sr-only">{{category.name if category else 'Katalog obnovljenih uređaja'}}</h1>{% include 'browse.html' %}{% endblock %}
