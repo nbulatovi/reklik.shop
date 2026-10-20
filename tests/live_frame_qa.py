@@ -15,6 +15,7 @@ from playwright.sync_api import sync_playwright
 
 ROOT=Path(__file__).resolve().parents[1]
 PYTHON=str(Path.home()/'.local/state/reklik/venv/bin/python')
+PUBLIC=os.environ.get('REKLIK_QA_PUBLIC','https://reklik.shop').rstrip('/')
 with tempfile.TemporaryDirectory(prefix='reklik-frame-') as temporary:
     state=Path(temporary)
     env=dict(os.environ,REKLIK_STATE=temporary,REKLIK_PORT='4342',REKLIK_SECURE_COOKIES='1')
@@ -52,7 +53,11 @@ serve(app.app,host='127.0.0.1',port=4342)
         with sync_playwright() as p:
             # Keep the proxy's HTTP cookie jar separate from browser CHIPS cookies.
             proxy_client=p.request.new_context()
-            browser=p.chromium.launch(executable_path='/usr/bin/google-chrome',headless=True,args=['--no-sandbox'])
+            browser_args=['--no-sandbox']
+            if os.environ.get('REKLIK_QA_GITHUB_IP'):
+                address=os.environ['REKLIK_QA_GITHUB_IP']
+                browser_args.append('--host-resolver-rules=MAP reklik.shop '+address+',MAP www.reklik.shop '+address)
+            browser=p.chromium.launch(executable_path='/usr/bin/google-chrome',headless=True,args=browser_args)
             page=browser.new_page(viewport={'width':390,'height':844},is_mobile=True,has_touch=True)
             page.set_default_timeout(10000)
             errors=[];page.on('pageerror',lambda error:errors.append(str(error)))
@@ -69,10 +74,10 @@ serve(app.app,host='127.0.0.1',port=4342)
                     route.fulfill(status=200,headers=headers,content_type='text/html',body='<meta http-equiv="refresh" content="0;url='+target+'">')
                 else:route.fulfill(response=response)
             page.route(backend+'/**',proxy)
-            page.route('https://nbulatovi.github.io/reklik.shop/backend.json?*',lambda route:route.fulfill(json={'backend':backend}))
+            page.route(PUBLIC+'/backend.json?*',lambda route:route.fulfill(json={'backend':backend}))
             page.route('https://whop.com/checkout/ch_qa_stub/',lambda route:route.fulfill(body='<title>QA payment redirect</title><p>No payment occurs.</p>',content_type='text/html'))
             def fill(method):
-                page.goto('https://nbulatovi.github.io/reklik.shop/checkout/?buy=1',wait_until='networkidle',timeout=60000)
+                page.goto(PUBLIC+'/checkout/?buy=1',wait_until='networkidle',timeout=60000)
                 frame=page.frame_locator('.store-frame')
                 frame.locator('[name=name]').fill('Петар Петровић')
                 frame.locator('[name=phone]').fill('+381 63 123 4567')
@@ -98,7 +103,7 @@ serve(app.app,host='127.0.0.1',port=4342)
             page.wait_for_url('https://whop.com/checkout/ch_qa_stub/',timeout=30000)
             assert page.title()=='QA payment redirect'
             page.route(backend+'/admin/specifications',lambda route:route.fulfill(json={'status':'completed','result':{'specs':{'Procesor':'Intel Core i5','Memorija':'16 GB RAM','Skladište':'512 GB SSD'},'description':'Automatski opis uređaja.','category_slug':'laptopovi','sources':[],'notes':''}}))
-            page.goto('https://nbulatovi.github.io/reklik.shop/admin/',wait_until='networkidle',timeout=60000)
+            page.goto(PUBLIC+'/admin/',wait_until='networkidle',timeout=60000)
             frame=page.frame_locator('.store-frame')
             frame.locator('[name=password]').fill('frame-qa-password')
             frame.get_by_role('button',name='Prijavi se').click()
