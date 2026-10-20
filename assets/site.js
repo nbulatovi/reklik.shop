@@ -163,6 +163,15 @@
   });
 
   if (window.parent !== window) {
+    if (document.querySelector('form')) fetch('/api/session',{cache:'no-store'}).then(r=>r.json()).then(data=>{
+      if (data.ready) return;
+      const notice=node('div',{class:'notice cookie-fallback',role:'alert'});
+      notice.append(node('p',{},'Za nastavak otvorite sigurnu stranicu u posebnom prozoru. Pregledač ovde ne može da sačuva vašu prijavu i porudžbinu.'));
+      notice.append(node('a',{href:location.href,target:'_blank',rel:'noopener',class:'button button-pink'},'Otvori sigurnu stranicu'));
+      document.querySelector('main').prepend(notice);
+      document.querySelectorAll('form').forEach(form=>{form.inert=true;});
+      document.querySelectorAll('form button[type=submit],form button:not([type]),[data-order-submit]').forEach(button=>{button.disabled=true;});
+    }).catch(()=>{});
     const origins = ['https://nbulatovi.github.io','https://reklik.shop','https://www.reklik.shop'];
     const notify = () => { const data = {type:'reklik-height',height:Math.max(document.body.scrollHeight,document.documentElement.scrollHeight)+25}; origins.forEach(origin => parent.postMessage(data,origin)); const order = $('[data-order-token]'); if (order) origins.forEach(origin => parent.postMessage({type:'reklik-order',token:order.dataset.orderToken},origin)); };
     new ResizeObserver(notify).observe(document.body); window.addEventListener('load',notify);

@@ -13,3 +13,5 @@ body p{font-size:16px!important;line-height:1.7}body small{font-size:14px!import
 
 .admin-tabs{flex-wrap:wrap;overflow:visible;gap:6px 12px}.admin-tabs a{white-space:normal}.row-actions a{color:#984100}.upload-zone{background:#fff8f0;border-color:#e0bf9c}.notice{background:#fff6eb;border-color:#ead9c6;color:#5f4934}[data-ai-status]{font-size:15px!important}
 @media(max-width:700px){.admin-tabs{gap:4px 10px}.admin-tabs a{padding:10px 8px}.trust-grid small{font-size:14px!important}.hero-copy .pill,.condition-tag{font-size:13px}.stock{font-size:14px}.art-note small{font-size:13px!important}}
+
+.cookie-fallback{max-width:850px;margin:20px auto;padding:24px}.cookie-fallback .button{margin-top:16px}

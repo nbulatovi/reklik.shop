@@ -272,6 +272,13 @@ def address_suggestion():
     return jsonify(suggestion=addresses.suggest(str(data.get('address','')),str(data.get('city','')),str(data.get('country','RS'))))
 
 
+@app.route('/api/session')
+def session_ready():
+    # Safari and some privacy modes block embedded cookies. Detect this before
+    # a buyer fills a form, then offer the same page in a first-party window.
+    return jsonify(ready=hmac.compare_digest(request.cookies.get('rk_session',''),g.session['id']))
+
+
 @app.route('/order/<token>/')
 def order_detail(token):
     order = store.order_by_token(token)

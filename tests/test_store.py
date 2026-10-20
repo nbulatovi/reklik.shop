@@ -93,6 +93,59 @@ class StoreTests(unittest.TestCase):
         self.assertEqual(order['delivery']['city'],'Горња Добриња')
         self.assertEqual(order['delivery']['address'],'')
 
+    def test_repeated_web_submission_returns_same_order(self):
+        data=self.checkout_form()
+        first=self.client.post('/checkout/',data=data)
+        second=self.client.post('/checkout/',data=data)
+        self.assertEqual(first.status_code,302)
+        self.assertEqual(second.status_code,303)
+        self.assertEqual(first.location,second.location)
+        self.assertEqual(store.product(1)['quantity'],0)
+        with store.connect() as c:self.assertEqual(c.execute('SELECT count(*) FROM orders').fetchone()[0],1)
+
+    def test_card_goes_directly_to_processor_without_marking_paid(self):
+        with patch.object(payments,'create_checkout',return_value='https://whop.com/checkout/ch_test/'):
+            response=self.client.post('/checkout/',data=self.checkout_form(payment_method='card'))
+        self.assertEqual(response.status_code,303)
+        self.assertEqual(response.location,'https://whop.com/checkout/ch_test/')
+        with store.connect() as c:order=dict(c.execute('SELECT * FROM orders').fetchone())
+        self.assertEqual(order['status'],'awaiting_payment')
+        self.assertIsNone(order['payment_id'])
+
+    def test_card_service_failure_retains_order_for_retry(self):
+        with patch.object(payments,'create_checkout',side_effect=ValueError('Temporarily unavailable')):
+            response=self.client.post('/checkout/',data=self.checkout_form(payment_method='card'))
+        self.assertEqual(response.status_code,303)
+        self.assertIn('/potvrda/?order=',response.location)
+        with store.connect() as c:order=dict(c.execute('SELECT * FROM orders').fetchone())
+        self.assertEqual(order['status'],'awaiting_payment')
+        self.assertEqual(store.product(1)['quantity'],0)
+
+    def test_checkout_price_change_requires_confirmation(self):
+        data=self.checkout_form()
+        with store.connect(True) as c:c.execute('UPDATE products SET price_cents=31000 WHERE id=1')
+        response=self.client.post('/checkout/',data=data)
+        self.assertEqual(response.status_code,422)
+        self.assertIn('Iznos je ažuriran',response.get_data(as_text=True))
+        self.assertEqual(store.product(1)['quantity'],1)
+
+    def test_embedded_cookie_probe_detects_missing_cookie(self):
+        self.client.get('/admin/login/')
+        self.assertTrue(self.client.get('/api/session').json['ready'])
+        fresh=web.app.test_client(use_cookies=False)
+        self.assertFalse(fresh.get('/api/session').json['ready'])
+
+    def test_checkout_configuration_keeps_currency_and_card_only(self):
+        order=self.order(method='card')
+        with patch.object(payments,'credentials',return_value={'WHOP_COMPANY_ID':'biz_test'}),patch.object(payments,'api',return_value={'id':'ch_test','plan':{'id':'plan_test'},'purchase_url':'https://whop.com/checkout/ch_test/'}) as api:
+            payments.create_checkout(order,'https://example.test')
+        payload=api.call_args.kwargs['json']
+        self.assertFalse(payload['plan']['adaptive_pricing_enabled'])
+        self.assertEqual(payload['plan']['stock'],1)
+        self.assertEqual(payload['payment_method_configuration']['enabled'],['card'])
+        self.assertFalse(payload['payment_method_configuration']['include_platform_defaults'])
+        self.assertTrue(payload['plan']['product']['custom_statement_descriptor'].startswith('WHOP*'))
+
     def test_ascii_serbian_names_accepted(self):
         response=self.client.post('/checkout/',data=self.checkout_form(name='Djordje Zivkovic',address='Vojvode Stepe 8',city='Cacak'))
         self.assertEqual(response.status_code,302)
