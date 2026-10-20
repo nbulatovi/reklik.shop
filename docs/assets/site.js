@@ -29,18 +29,28 @@
   const search = $('[data-catalog-search]'), grid = $('[data-product-grid]');
   if (grid) {
     const cards = $$('.product-card', grid);
+    const brand = $('[data-brand-filter]'), min = $('[data-price-min]'), max = $('[data-price-max]'), stock = $('[data-in-stock]');
+    const panel = $('[data-filter-panel]'), desktop = window.matchMedia('(min-width: 701px)');
+    const layoutFilters = () => { if (panel) panel.open = desktop.matches; };
+    layoutFilters(); desktop.addEventListener('change',layoutFilters);
     const filter = () => {
       const query = fold(search?.value || '').trim();
       const tokens = query.split(/\s+/).filter(Boolean);
-      cards.forEach(c => { c.hidden = !tokens.every(t => fold(c.dataset.search).includes(t)); });
+      const floor = min?.value ? Number(min.value) : 0, ceiling = max?.value ? Number(max.value) : Infinity;
+      cards.forEach(c => { const price = Number(c.dataset.price); c.hidden = !tokens.every(t => fold(c.dataset.search).includes(t)) || (brand?.value && c.dataset.brand !== brand.value) || price < floor || price > ceiling || (stock?.checked && Number(c.dataset.stock) < 1); });
       const n = cards.filter(c => !c.hidden).length;
       if ($('[data-results-count]')) $('[data-results-count]').textContent = n;
       if ($('[data-empty]')) $('[data-empty]').hidden = n > 0;
+      const active = [brand?.value,min?.value,max?.value,stock?.checked].filter(Boolean).length;
+      if ($('[data-filter-count]')) $('[data-filter-count]').textContent = active ? '('+active+')' : '';
     };
     if (search) {
       search.value = new URLSearchParams(location.search).get('q') || search.value;
       search.addEventListener('input', filter);
+      search.form?.addEventListener('submit',event=>{event.preventDefault();filter();grid.scrollIntoView({block:'start',behavior:'smooth'});});
     }
+    [brand,min,max,stock].filter(Boolean).forEach(input=>input.addEventListener(input.tagName === 'SELECT' || input.type === 'checkbox' ? 'change' : 'input',filter));
+    $$('[data-reset-filters]').forEach(button=>button.addEventListener('click',()=>{if(search)search.value='';if(brand)brand.value='';if(min)min.value='';if(max)max.value='';if(stock)stock.checked=false;filter();}));
     $('[data-sort]')?.addEventListener('change', e => {
       const mode = e.target.value;
       [...cards].sort((a,b) => mode === 'low' ? Number(a.dataset.price)-Number(b.dataset.price) : mode === 'high' ? Number(b.dataset.price)-Number(a.dataset.price) : mode === 'name' ? a.dataset.search.localeCompare(b.dataset.search) : cards.indexOf(a)-cards.indexOf(b)).forEach(c => grid.append(c));

@@ -116,12 +116,12 @@ def template_context():
 
 @app.route('/health')
 def health():
-    return jsonify(ok=True, service='reklik', inventory_count=len(store.products()))
+    return jsonify(ok=True, service='reklik', inventory_count=sum(not p['is_demo'] for p in store.products()))
 
 
 @app.route('/')
 def home():
-    return render_template('home.html', products=store.products()[:8], page_title='Sertifikovano obnovljeni laptopovi, telefoni i tableti')
+    return render_template('home.html', products=store.products(), category=None, query='', page_title='Sertifikovano obnovljeni laptopovi, telefoni i tableti')
 
 
 @app.route('/katalog/')
@@ -154,7 +154,7 @@ def product(slug):
     p = store.product(slug)
     if not p:
         abort(404)
-    return render_template('product.html', product=p, page_title=p['title'])
+    return render_template('product.html', product=p, page_title=p['title'], private_page=bool(p['is_demo']))
 
 
 @app.route('/<page>/')
@@ -461,7 +461,10 @@ def save_product():
         if not 0 <= weight <= 100:
             raise ValueError('Težina mora biti između 0 i 100 kg.')
         active = int(f.get('active') == 'yes')
-        if active and not images:
+        is_demo = int(f.get('is_demo') == 'yes')
+        if is_demo:
+            quantity = 0
+        if active and not images and not is_demo:
             raise ValueError('Dodajte bar jednu stvarnu fotografiju pre objavljivanja uređaja.')
         pid = int(f.get('id') or 0)
         with store.connect(True) as c:
@@ -484,6 +487,7 @@ def save_product():
                   specs,images,weight_kg,active,updated_at,created_at,slug) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
                   values + (store.now(), slug))
                 pid = c.execute('SELECT last_insert_rowid()').fetchone()[0]
+            c.execute('UPDATE products SET is_demo=? WHERE id=?',(is_demo,pid))
         store.audit('product_saved', pid)
         queue_publish()
         return back_admin(message='Uređaj je sačuvan. Javne stranice se automatski objavljuju.')

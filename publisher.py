@@ -22,6 +22,8 @@ def public_catalog(cfg=None):
     cfg = cfg or store.settings()
     rows = []
     for p in store.products():
+        if p['is_demo']:
+            continue
         rows.append({key: p[key] for key in ['id','title','slug','brand','category_name','category_slug','condition','images','quantity']} |
                     {'price_minor': store.money_minor(p['price_cents'], cfg)})
     return {'currency': cfg['currency'], 'products': rows,
@@ -53,13 +55,13 @@ def export():
         if not context.get('private_page'):
             urls.append(path)
     all_products = store.products()
-    page('/', 'home.html', products=all_products[:8], page_title='Sertifikovano obnovljeni laptopovi, telefoni i tableti')
+    page('/', 'home.html', products=all_products, category=None, query='', page_title='Sertifikovano obnovljeni laptopovi, telefoni i tableti')
     page('/katalog/', 'catalog.html', products=all_products, category=None, query='', page_title='Katalog obnovljenih uređaja')
     for cat in store.categories():
         page('/kategorija/' + cat['slug'] + '/', 'catalog.html', products=store.products(category=cat['slug']), category=cat,
              query='', page_title=cat['name'] + ' — sertifikovano obnovljeno')
     for p in all_products:
-        page('/proizvod/' + p['slug'] + '/', 'product.html', product=p, page_title=p['title'])
+        page('/proizvod/' + p['slug'] + '/', 'product.html', product=p, page_title=p['title'],private_page=bool(p['is_demo']))
     titles = {'o-nama':'Nova prilika za odličnu tehnologiju','dostava':'Dostava i preuzimanje',
               'garancija':'Kvalitet, prava kupaca i dodatna garancija','uslovi':'Podaci o prodavcu i uslovi kupovine',
               'privatnost':'Privatnost bez praćenja','povracaj':'Povraćaj i reklamacije','kontakt':'Tu smo za vas'}
