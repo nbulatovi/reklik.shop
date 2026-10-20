@@ -1,5 +1,6 @@
 """Export complete crawlable HTML and publish it to GitHub Pages."""
 import json
+import fcntl
 import os
 import shutil
 import subprocess
@@ -104,7 +105,9 @@ def git(*args, check=True):
 
 
 def publish(push=True):
-    with LOCK:
+    # The server and tunnel run in separate processes and may publish together.
+    with LOCK, (store.STATE / 'publish.lock').open('a') as process_lock:
+        fcntl.flock(process_lock.fileno(),fcntl.LOCK_EX)
         count = export()
         if not (store.ROOT / '.git').exists():
             return {'pages': count, 'pushed': False}
