@@ -103,6 +103,9 @@ Image.new('RGB',(3200,2400),(190,193,198)).save(store.STATE/'camera-large.jpg')
                         page.locator('.product-card h3 a').first.click()
                     else: page.goto(origin+path)
                     layout(str(width)+path)
+                    if path=='/':
+                        contact_sizes=page.locator('.site-footer').evaluate('(footer)=>({phone:parseFloat(getComputedStyle(footer.querySelector("a[href^=tel]")).fontSize),email:parseFloat(getComputedStyle(footer.querySelector("a[href^=mailto]")).fontSize)})')
+                        assert contact_sizes['email']==contact_sizes['phone'] and contact_sizes['email']>=24,contact_sizes
                     if width==390 and path in ('/','/admin/','/admin/?tab=settings'):
                         page.screenshot(path='/tmp/reklik-'+{'/':'home','/admin/':'admin','/admin/?tab=settings':'settings'}[path]+'-mobile.png',full_page=True)
                 if width==1440:

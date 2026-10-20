@@ -113,6 +113,14 @@ def init_db():
           product_id INTEGER PRIMARY KEY REFERENCES products(id) ON DELETE CASCADE,
           job_id TEXT, status TEXT NOT NULL, baseline TEXT NOT NULL, fields TEXT NOT NULL,
           message TEXT NOT NULL DEFAULT '', updated_at INTEGER NOT NULL);
+        CREATE TABLE IF NOT EXISTS order_notifications(
+          id INTEGER PRIMARY KEY, order_id TEXT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+          event TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', attempts INTEGER NOT NULL DEFAULT 0,
+          next_attempt INTEGER NOT NULL DEFAULT 0, locked_until INTEGER NOT NULL DEFAULT 0,
+          recipient TEXT NOT NULL DEFAULT '', provider_id TEXT NOT NULL DEFAULT '',
+          error TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, sent_at INTEGER,
+          UNIQUE(order_id,event));
+        CREATE INDEX IF NOT EXISTS order_notifications_pending ON order_notifications(status,next_attempt,locked_until,id);
         ''')
         product_columns = {row['name'] for row in c.execute('PRAGMA table_info(products)')}
         if 'revision' not in product_columns:
@@ -364,6 +372,8 @@ def create_order(raw, customer, delivery, method, idem, test=False, expected=Non
            json.dumps(customer, ensure_ascii=False), json.dumps(dict(delivery, days=q['days']), ensure_ascii=False),
            q['subtotal_minor'], q['warranty_minor'], q['shipping_minor'], q['total_minor'], now(),
            now() + 1800 if method == 'card' else None, int(test)))
+        if not test:
+            c.execute("INSERT INTO order_notifications(order_id,event,created_at) VALUES(?,'new_order',?)",(oid,now()))
         return unpack(c.execute('SELECT * FROM orders WHERE id=?', (oid,)).fetchone())
 
 

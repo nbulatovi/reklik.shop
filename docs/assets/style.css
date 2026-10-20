@@ -163,3 +163,6 @@ body p{font-size:16px!important;line-height:1.7}body small{font-size:14px!import
 .inventory-camera-open{width:100%;margin:8px 0 14px;min-height:56px}.inventory-camera{padding:10px;margin:0 0 16px;border:1px solid #d2c6b9;border-radius:9px;background:#fffaf5}.inventory-camera video{display:block;width:100%;max-height:360px;aspect-ratio:4/3;object-fit:contain;background:#161616;border-radius:6px}.inventory-camera p{font-size:15px!important;line-height:1.4!important;margin:9px 0}.camera-controls{display:grid;grid-template-columns:1fr auto;gap:10px}.camera-controls .button{padding:10px;font-size:16px!important}
 
 .footer-bottom .footer-admin{min-height:48px;padding:11px 20px;font-size:16px;font-weight:700;flex-shrink:0}.inventory-ai-note{font-size:14px;line-height:1.5;color:#665e56}.inventory-ai-note:empty{display:none}.inventory-ai-note[data-state=pending]{color:#965000}
+
+/* Contact email has the same emphasis as the phone number. */
+.site-footer a[href^="mailto:"]{font-size:24px!important;font-weight:700;line-height:1.6;overflow-wrap:anywhere}.footer-grid>div{min-width:0}@media(min-width:901px){.footer-grid{grid-template-columns:1fr .75fr 1fr 1.7fr;gap:32px}}

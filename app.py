@@ -266,6 +266,8 @@ def checkout():
                 abort(403)
             order = store.create_order(raw, customer, delivery, values.get('payment_method', 'cod'), idem,
                                        expected=(q['currency'],q['total_minor']))
+            import notifications
+            notifications.WAKE.set()
             queue_publish()
             if order['payment_method'] == 'card' and not order.get('checkout_url'):
                 try:
@@ -432,7 +434,7 @@ def admin_dashboard():
         if selected:
             selected = dict(selected, id='', slug='', quantity=1, images=[])
     with store.connect() as c:
-        orders = [store.unpack(r) for r in c.execute('SELECT * FROM orders ORDER BY created_at DESC LIMIT 100')]
+        orders = [store.unpack(r) for r in c.execute("SELECT o.*, (SELECT status FROM order_notifications n WHERE n.order_id=o.id AND n.event='new_order') email_status, (SELECT recipient FROM order_notifications n WHERE n.order_id=o.id AND n.event='new_order') email_recipient FROM orders o ORDER BY o.created_at DESC LIMIT 100")]
         jobs = [dict(r) for r in c.execute("SELECT * FROM jobs WHERE kind!='specifications' ORDER BY created_at DESC LIMIT 5")]
     return render_template('admin.html', products=store.products(admin=True), selected=selected, orders=orders,
                            jobs=jobs, tab=tab, message=request.args.get('message', ''), error=request.args.get('error', ''),
@@ -597,7 +599,10 @@ def save_settings():
         rates = {zone: int(f.get('rate_' + zone, value)) for zone, value in cfg['international_rates_rsd'].items()}
         if any(value <= 0 or value > 1000000 for value in rates.values()):
             raise ValueError('Proverite međunarodnu poštarinu.')
-        store.set_settings({'brand': f.get('brand', cfg['brand']).strip()[:60], 'currency': f['currency'], 'eur_rsd': str(rate),
+        email=f.get('email',cfg['email']).strip()
+        if len(email)>180 or not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+',email):
+            raise ValueError('Unesite ispravan kontakt email za obaveštenja o porudžbinama.')
+        store.set_settings({'brand': f.get('brand', cfg['brand']).strip()[:60], 'email':email, 'currency': f['currency'], 'eur_rsd': str(rate),
           'pickup_enabled': f.get('pickup_enabled') == 'yes', 'international_enabled': f.get('international_enabled') == 'yes',
           'payment_enabled': f.get('payment_enabled') == 'yes', 'indexing_enabled': f.get('indexing_enabled') == 'yes',
           'warranty_rsd': warranty, 'couriers': couriers, 'international_rates_rsd': rates,

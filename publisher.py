@@ -112,7 +112,7 @@ def publish(push=True):
         if not (store.ROOT / '.git').exists():
             return {'pages': count, 'pushed': False}
         git('add','--','docs','assets','templates','app.py','store.py','payments.py','publisher.py',
-            'ai_editor.py','editor_guard.mjs','specifications.py','specs_guard.mjs','addresses.py','runtime.py','domain.py','setup.py','requirements.txt','.gitignore','README.md','tests')
+            'ai_editor.py','editor_guard.mjs','specifications.py','specs_guard.mjs','addresses.py','runtime.py','domain.py','notifications.py','setup.py','requirements.txt','.gitignore','README.md','tests')
         changed = git('diff','--cached','--quiet',check=False).returncode != 0
         if changed:
             git('commit','-m','Update ReKlik storefront and catalog')

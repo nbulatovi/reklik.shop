@@ -23,6 +23,7 @@ import app as web
 import payments
 import addresses
 import specifications
+import notifications
 
 
 class StoreTests(unittest.TestCase):
@@ -510,6 +511,86 @@ class StoreTests(unittest.TestCase):
         with patch.object(domain,'read',side_effect=lambda url:bodies[url]),self.assertRaises(ValueError):domain.healthy(indexed=True)
         bodies['https://qa.trycloudflare.com/health']=json.dumps({'ok':False})
         with patch.object(domain,'read',side_effect=lambda url:bodies[url]),self.assertRaises(ValueError):domain.healthy()
+
+    def test_order_email_is_durable_and_idempotent(self):
+        order=self.order(idem='email-once')
+        self.order(idem='email-once')
+        with store.connect() as c:
+            rows=[dict(r) for r in c.execute('SELECT * FROM order_notifications')]
+        self.assertEqual(len(rows),1);self.assertEqual(rows[0]['order_id'],order['id'])
+        self.assertEqual(rows[0]['status'],'pending')
+        with patch.object(notifications,'deliver',return_value='mail-provider-id') as deliver:
+            self.assertEqual(notifications.run_once(),1)
+            self.assertEqual(notifications.run_once(),0)
+        self.assertEqual(deliver.call_count,1)
+        with store.connect() as c:
+            row=dict(c.execute('SELECT * FROM order_notifications').fetchone())
+        self.assertEqual(row['status'],'sent');self.assertEqual(row['provider_id'],'mail-provider-id')
+
+    def test_failed_order_transaction_does_not_queue_email(self):
+        delivery={'country':'RS','method':'shipping','courier':'post-express','city':'Selo'}
+        with self.assertRaises(ValueError):store.create_order([{'id':1,'qty':1,'warranty':0}],{'name':'Test'},delivery,'cod','failed-mail',expected=('EUR',1))
+        with store.connect() as c:self.assertEqual(c.execute('SELECT count(*) FROM order_notifications').fetchone()[0],0)
+
+    def test_notification_uses_front_page_email_and_keeps_cyrillic_details(self):
+        delivery={'country':'RS','method':'shipping','courier':'post-express','address':'','city':'Горња Добриња','postal_code':''}
+        order=store.create_order([{'id':1,'qty':1,'warranty':0}],{'name':'Ђорђе Живковић','phone':'0631234567','email':'buyer@example.test'},delivery,'cod','unicode-mail')
+        store.set_settings({'email':'main@example.test'})
+        with patch.object(notifications,'deliver',return_value='sent') as deliver:notifications.run_once()
+        payload=deliver.call_args.args[0]
+        self.assertEqual(payload['to'],'main@example.test');self.assertEqual(payload['reply_to'],'buyer@example.test')
+        for text in ['Ђорђе Живковић','Горња Добриња','Post Express',order['id'],'Pouzeće','0631234567']:
+            self.assertIn(text,payload['text'])
+        self.assertIn('main@example.test',self.client.get('/').get_data(as_text=True))
+
+    def test_notification_retries_after_failure_without_affecting_order(self):
+        order=self.order()
+        with patch.object(notifications,'deliver',side_effect=ValueError('Privremena greška')):
+            self.assertEqual(notifications.run_once(),0)
+        with store.connect() as c:row=dict(c.execute('SELECT * FROM order_notifications').fetchone())
+        self.assertEqual(row['status'],'pending');self.assertEqual(row['attempts'],1)
+        self.assertGreater(row['next_attempt'],store.now())
+        self.assertEqual(store.order_by_token(order['token'])['status'],'new');self.assertEqual(store.product(1)['quantity'],0)
+        with patch.object(notifications,'deliver',return_value='later') as deliver:
+            notifications.run_once();deliver.assert_not_called()
+            with store.connect(True) as c:c.execute('UPDATE order_notifications SET next_attempt=0')
+            self.assertEqual(notifications.run_once(),1)
+
+    def test_notification_lease_prevents_two_workers_sending_same_email(self):
+        self.order()
+        with store.connect(True) as c:c.execute('UPDATE order_notifications SET locked_until=?',(store.now()+90,))
+        with patch.object(notifications,'deliver') as deliver:
+            self.assertEqual(notifications.run_once(),0);deliver.assert_not_called()
+        with store.connect(True) as c:c.execute('UPDATE order_notifications SET locked_until=0')
+        with patch.object(notifications,'deliver',return_value='resumed'):self.assertEqual(notifications.run_once(),1)
+
+    def test_card_notification_distinguishes_unpaid_and_verified_payment(self):
+        order=self.order(method='card')
+        with patch.object(notifications,'deliver',return_value='pending-mail') as deliver:notifications.run_once()
+        self.assertIn('NIJE potvrđena',deliver.call_args.args[0]['text'])
+        with store.connect(True) as c:c.execute("UPDATE orders SET plan_id='plan_test' WHERE id=?",(order['id'],))
+        order=store.order_by_token(order['token'])
+        with patch.object(payments,'credentials',return_value={'WHOP_COMPANY_ID':'biz_test'}):
+            self.assertTrue(payments.verify_payment(order,self.payment(order)))
+            self.assertTrue(payments.verify_payment(order,self.payment(order)))
+        with store.connect() as c:self.assertEqual(c.execute("SELECT count(*) FROM order_notifications WHERE event='payment_paid'").fetchone()[0],1)
+        with patch.object(notifications,'deliver',return_value='paid-mail') as deliver:self.assertEqual(notifications.run_once(),1)
+        self.assertIn('Uplata potvrđena',deliver.call_args.args[0]['subject'])
+        self.assertNotIn('NIJE potvrđena',deliver.call_args.args[0]['text'])
+
+    def test_payment_tests_do_not_send_real_order_alerts(self):
+        payments.test_order()
+        with store.connect() as c:self.assertEqual(c.execute('SELECT count(*) FROM order_notifications').fetchone()[0],0)
+
+    def test_admin_contact_email_controls_public_contact_and_alerts(self):
+        html=self.login()
+        data={'csrf':self.hidden(html,'csrf'),'currency':'EUR','eur_rsd':'117.2','courier_post-express':'yes','email':'orders@example.test'}
+        result=self.client.post('/admin/settings',data=data)
+        self.assertEqual(result.status_code,302);self.assertEqual(store.settings()['email'],'orders@example.test')
+        self.assertIn('mailto:orders@example.test',self.client.get('/').get_data(as_text=True))
+        data['email']='invalid\nBcc: other@example.test'
+        self.client.post('/admin/settings',data=data)
+        self.assertEqual(store.settings()['email'],'orders@example.test')
 
     def test_homepage_browsing_precedes_marketing(self):
         html=self.client.get('/').get_data(as_text=True)

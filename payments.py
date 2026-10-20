@@ -111,6 +111,8 @@ def verify_payment(order, payment):
                 c.execute('UPDATE products SET quantity=quantity-?,revision=revision+1 WHERE id=?', (line['qty'], line['id']))
         c.execute("UPDATE orders SET status='paid',payment_id=?,stock_held=1,expires_at=NULL WHERE id=?",
                   (payment['id'], order['id']))
+        if not current['test_order']:
+            c.execute("INSERT OR IGNORE INTO order_notifications(order_id,event,created_at) VALUES(?,'payment_paid',?)",(order['id'],store.now()))
     store.audit('payment_verified', order['id'], payment['id'])
     return True
 
