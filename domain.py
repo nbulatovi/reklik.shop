@@ -14,7 +14,8 @@ GITHUB_IPV6={f'2606:50c0:800{n}::153' for n in range(4)}
 
 
 def records(host,kind):
-    result=subprocess.run(['dig','+short','+time=3','+tries=1',host,kind],capture_output=True,text=True,timeout=5,check=True)
+    # Ask the domain's authoritative Namecheap server, avoiding stale parking caches.
+    result=subprocess.run(['dig','@dns1.registrar-servers.com','+short','+time=3','+tries=1',host,kind],capture_output=True,text=True,timeout=5,check=True)
     return {line.strip().rstrip('.') for line in result.stdout.splitlines() if line.strip()}
 
 
