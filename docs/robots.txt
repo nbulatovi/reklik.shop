@@ -1,2 +1,8 @@
 User-agent: *
-Disallow: /
+Disallow: /admin/
+Disallow: /checkout/
+Disallow: /korpa/
+Disallow: /potvrda/
+Disallow: /order/
+Disallow: /api/
+Sitemap: https://reklik.shop/sitemap.xml
