@@ -28,6 +28,6 @@
  <div class="product-body"><span class="eyebrow">{{p.category_name}}</span><h3><a href="{{base}}/proizvod/{{p.slug}}/">{{p.title}}</a></h3>
  <p class="product-specs">{{ p.specs.values()|list|truncate_specs }}</p>
  <div class="product-bottom"><strong>{{money(p.price_cents)}}</strong><span class="stock {{'sold' if p.quantity < 1 else ''}}">{{'Na stanju' if p.quantity > 0 else 'Prodato'}}</span></div>
- <a class="button button-dark button-full" href="{{base}}/checkout/?buy={{p.id}}" {% if p.quantity < 1 %}aria-disabled="true" tabindex="-1"{% endif %}>Kupi sada {{icon('arrow',17)}}</a></div>
+ {% if current_path == '/' %}<a class="button button-pink button-full" href="{{base}}/proizvod/{{p.slug}}/">Više informacija {{icon('arrow',17)}}</a>{% else %}<a class="button button-dark button-full" href="{{base}}/checkout/?buy={{p.id}}" {% if p.quantity < 1 %}aria-disabled="true" tabindex="-1"{% endif %}>Kupi sada {{icon('arrow',17)}}</a>{% endif %}</div>
 </article>
 {%- endmacro %}

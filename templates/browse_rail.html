@@ -9,7 +9,6 @@
 <div class="field"><label for="brand-filter">Proizvođač</label><select id="brand-filter" data-brand-filter><option value="">Svi proizvođači</option>{% for brand in products|map(attribute='brand')|reject('equalto','')|unique|sort %}<option value="{{brand}}">{{brand}}</option>{% endfor %}</select></div>
 <fieldset class="budget-filter"><legend>Cena ({{cfg.currency}})</legend><div><label for="price-min">Od<input id="price-min" type="number" min="0" step="1" inputmode="numeric" data-price-min placeholder="0"></label><label for="price-max">Do<input id="price-max" type="number" min="0" step="1" inputmode="numeric" data-price-max placeholder="Bez limita"></label></div></fieldset>
 <div class="field"><label for="shop-sort">Redosled</label><select id="shop-sort" data-sort><option value="recent">Najnovije</option><option value="low">Cena: niža prvo</option><option value="high">Cena: viša prvo</option><option value="name">Naziv: A–Z</option></select></div>
-{% if products %}<label class="check-field"><input type="checkbox" data-in-stock> Samo dostupni uređaji</label>{% endif %}
 <button class="text-link filter-reset" type="button" data-reset-filters>Poništi filtere</button>
 <p class="shop-result-count" role="status"><span data-results-count>{{products|length}}</span> uređaja u izboru</p>
 </div></details>
