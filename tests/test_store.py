@@ -335,6 +335,34 @@ class StoreTests(unittest.TestCase):
         for query in ['Čačak','Cacak','Чачак','Chachak']:
             self.assertEqual(len(store.products(query=query)),1,query)
 
+    def test_examples_are_blocked_from_orders_and_cart_feed(self):
+        with store.connect(True) as c:c.execute('UPDATE products SET is_demo=1,quantity=10 WHERE id=1')
+        with self.assertRaisesRegex(ValueError,'primer'):
+            store.quote([{'id':1}])
+        self.assertEqual(self.client.get('/catalog.json').json['products'],[])
+        html=self.client.get('/proizvod/test-thinkpad/').get_data(as_text=True)
+        self.assertIn('Ovo je primer',html)
+        self.assertNotIn('class="buy-form"',html)
+        self.assertNotIn('data-add-cart=',html)
+        self.assertNotIn('"@type": "Offer"',html)
+        self.assertIn('noindex',html)
+
+    def test_examples_hide_as_soon_as_real_stock_is_published(self):
+        with store.connect(True) as c:
+            c.execute('''INSERT INTO products(category_id,title,slug,brand,price_cents,quantity,active,is_demo,created_at,updated_at)
+              VALUES(1,'Example laptop','example-laptop','Lenovo',20000,0,1,1,?,?)''',(store.now(),store.now()))
+        self.assertEqual(len(store.products()),1)
+        self.assertIsNone(store.product('example-laptop'))
+        self.assertEqual(len(store.products(admin=True)),2)
+        with store.connect(True) as c:c.execute('UPDATE products SET active=0 WHERE id=1')
+        self.assertEqual(store.products()[0]['slug'],'example-laptop')
+
+    def test_homepage_browsing_precedes_marketing(self):
+        html=self.client.get('/').get_data(as_text=True)
+        self.assertLess(html.index('data-product-grid'),html.index('class="hero"'))
+        for marker in ('data-catalog-search','data-brand-filter','data-price-min','data-price-max','data-sort'):
+            self.assertIn(marker,html)
+
     def test_address_exact_match_only(self):
         address_db=Path(TEMP.name)/'test-addresses.sqlite3'
         address_db.unlink(missing_ok=True)
