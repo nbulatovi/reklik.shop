@@ -26,6 +26,7 @@ import store
 store.init_db()
 (store.STATE/'private.json').write_text(json.dumps({'secret':'browser-test-secret','password_hash':generate_password_hash('browser-test-password')}))
 Image.new('RGB',(1200,900),(218,220,223)).save(store.STATE/'camera.jpg')
+Image.new('RGB',(3200,2400),(190,193,198)).save(store.STATE/'camera-large.jpg')
 '''
     subprocess.run([PYTHON,'-c',fixture],cwd=ROOT,env=env,check=True)
     log = open(Path(state)/'server.log','w')
@@ -38,7 +39,7 @@ Image.new('RGB',(1200,900),(218,220,223)).save(store.STATE/'camera.jpg')
                 if urlopen(origin+'/health',timeout=1).status==200: break
             except OSError: time.sleep(.1)
         with sync_playwright() as p:
-            browser=p.chromium.launch(executable_path='/usr/bin/google-chrome',headless=True,args=['--no-sandbox'])
+            browser=p.chromium.launch(executable_path='/usr/bin/google-chrome',headless=True,args=['--no-sandbox','--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream'])
             context=browser.new_context(viewport={'width':390,'height':844},is_mobile=True,has_touch=True)
             page=context.new_page()
             errors=[]
@@ -63,11 +64,21 @@ Image.new('RGB',(1200,900),(218,220,223)).save(store.STATE/'camera.jpg')
             page.locator('[name=specs]').fill('Procesor: Intel Core i5\nMemorija: 16 GB\nSkladište: 512 GB SSD')
             page.locator('textarea[name=description]').fill('Testiran i spreman za rad. Fotografija je isključivo testni uzorak.')
             page.locator('input[capture=environment]').set_input_files(str(Path(state)/'camera.jpg'))
+            page.locator('[data-photo-preview] img').first.wait_for()
+            page.locator('input[capture=environment]').set_input_files(str(Path(state)/'camera-large.jpg'))
+            page.wait_for_function('() => document.querySelectorAll("[data-photo-preview] img").length===2')
+            # Repeated camera captures accumulate; a discarded shot can be retaken.
+            page.locator('[data-photo-preview] button').first.click()
+            assert page.locator('[data-photo-preview] img').count()==1
+            page.locator('input[capture=environment]').set_input_files(str(Path(state)/'camera.jpg'))
+            page.wait_for_function('() => document.querySelector("[data-staged-photos]").files.length===2')
+            assert '2 / 10' in page.locator('[data-photo-status]').inner_text()
             page.locator('[name=active]').check()
             page.get_by_role('button',name='Sačuvaj uređaj').click()
             page.wait_for_url('**/admin/?**')
             assert page.locator('.error-message').count()==0, page.locator('body').inner_text()
             page.locator('.row-actions').get_by_role('link',name='Uredi',exact=True).click()
+            assert page.locator('[name=keep_images]').count()==2
             assert page.locator('[name=price]').input_value()=='300.00'
             page.locator('.inventory-advanced summary').click()
             page.locator('textarea[name=description]').fill('Uređen opis sa telefona. Sertifikovano testiran uređaj.')
@@ -139,9 +150,26 @@ Image.new('RGB',(1200,900),(218,220,223)).save(store.STATE/'camera.jpg')
             page.wait_for_url('**/admin/?**')
             assert 'Latitude 5420' in page.locator('.inventory-row').first.inner_text()
             assert 'Objavljeno' in page.locator('.inventory-row').first.inner_text()
+            page.goto(origin+'/admin/')
+            context.grant_permissions(['camera'],origin=origin)
+            page.locator('[data-open-camera]').click()
+            page.wait_for_function('() => document.querySelector("[data-camera-video]").videoWidth>0')
+            for n in (1,2):
+                page.locator('[data-capture-photo]').click()
+                page.wait_for_function('(n) => document.querySelector("[data-staged-photos]").files.length===n',arg=n)
+            page.locator('[data-close-camera]').click()
+            assert page.locator('[data-camera-video]').evaluate('e=>e.srcObject===null')
+            page.locator('[name=brand]').fill('Dell')
+            page.locator('[name=title]').fill('Latitude sa kamerom u stranici')
+            page.locator('[name=price]').fill('250')
+            page.wait_for_function('() => document.querySelector("[data-spec-status]").textContent.includes("su popunjeni")')
+            page.locator('[data-inventory-save]').click()
+            page.wait_for_url('**/admin/?**')
+            page.locator('.inventory-row').first.get_by_role('link',name='Uredi',exact=True).click()
+            assert page.locator('[name=keep_images]').count()==2
             assert not errors,errors
             browser.close()
-            print(json.dumps({'result':'passed','widths':[320,390,768,1440],'flows':['camera upload','inventory edit','reuse text','create category','COD village Cyrillic no street/postcode','AKS quote','phone-confirm order'],'javascript_errors':errors}))
+            print(json.dumps({'result':'passed','widths':[320,390,768,1440],'flows':['multiple camera uploads, removal and retake','in-page camera capture and stream release','inventory edit','reuse text','create category','COD village Cyrillic no street/postcode','AKS quote','phone-confirm order'],'javascript_errors':errors}))
     finally:
         server.terminate()
         server.wait(timeout=15)
