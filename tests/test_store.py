@@ -494,6 +494,22 @@ class StoreTests(unittest.TestCase):
         self.assertEqual(healthy.call_count,2)
         healthy.assert_called_with(indexed=True)
 
+    def test_domain_health_requires_root_links_live_backend_and_indexing(self):
+        import domain
+        origin='https://reklik.shop'
+        bodies={origin+'/':'<body data-base=""><a class="footer-admin">Admin</a>',
+                origin+'/catalog.json':json.dumps({'products':[]}),
+                origin+'/backend.json':json.dumps({'backend':'https://qa.trycloudflare.com'}),
+                origin+'/admin/':'data-frame-kind="admin"',origin+'/checkout/':'data-frame-kind="checkout"',
+                origin+'/sitemap.xml':'<loc>https://reklik.shop/kategorija/telefoni/</loc>',
+                origin+'/robots.txt':'User-agent: *\nDisallow: /admin/\n',
+                'https://qa.trycloudflare.com/health':json.dumps({'ok':True})}
+        with patch.object(domain,'read',side_effect=lambda url:bodies[url]):domain.healthy(indexed=True)
+        bodies[origin+'/robots.txt']='User-agent: *\nDisallow: /\n'
+        with patch.object(domain,'read',side_effect=lambda url:bodies[url]),self.assertRaises(ValueError):domain.healthy(indexed=True)
+        bodies['https://qa.trycloudflare.com/health']=json.dumps({'ok':False})
+        with patch.object(domain,'read',side_effect=lambda url:bodies[url]),self.assertRaises(ValueError):domain.healthy()
+
     def test_homepage_browsing_precedes_marketing(self):
         html=self.client.get('/').get_data(as_text=True)
         self.assertLess(html.index('data-product-grid'),html.index('class="hero"'))

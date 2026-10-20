@@ -8,3 +8,6 @@ test-results/
 .pytest_cache/
 .public-build/
 .public-previous/
+
+# Local operational memory; secrets stay outside the repository.
+AGENTS.md
