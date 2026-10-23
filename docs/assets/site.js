@@ -94,7 +94,7 @@
           const qty = node('input', {type: 'number', min: '1', max: String(Math.max(1, Math.min(20,p.quantity))), value: String(line.qty), 'aria-label': 'Količina za ' + p.title});
           qty.addEventListener('change', () => { const next = readCart(); next[index].qty = Math.max(1, Math.min(20,Number(qty.value)||1)); saveCart(next); render(); });
           const choices = node('select', {'aria-label': 'Dodatna garancija za ' + p.title});
-          for (let n=0;n<=3;n++) { const option = node('option', {value: String(n)}, n ? '+' + n + ' mes. — ' + money(data.warranty_minor[n], data.currency) : 'Bez dodatne garancije'); option.selected = Number(line.warranty) === n; choices.append(option); }
+          for (let n=0;n<=3;n++) { const option = node('option', {value: String(n)}, n ? '+' + n + ' mes. — ' + money(data.warranty_minor[n], data.currency) : (data.included_warranty_days||14)+' dana — uključeno u cenu'); option.selected = Number(line.warranty) === n; choices.append(option); }
           choices.addEventListener('change', () => { const next = readCart(); next[index].warranty = Number(choices.value); saveCart(next); render(); });
           details.append(qty, document.createTextNode(' '), choices);
           const actions = node('div'); const amount = (p.price_minor + (data.warranty_minor[line.warranty] || 0)) * line.qty; total += amount;
