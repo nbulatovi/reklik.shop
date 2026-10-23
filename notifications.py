@@ -23,6 +23,8 @@ def content(order,event):
         if item.get('warranty'):lines.append(f"  Dodatno pokriće: {item['warranty']} mes.")
     for label,key in [('Uređaji','subtotal_minor'),('Dodatna garancija','warranty_minor'),('Dostava','shipping_minor'),('UKUPNO','total_minor')]:
         lines.append(f"{label}: {store.display_money(order[key],order['currency'])}")
+    if order.get('pricing'):
+        fx=order['pricing'];lines+=['Protivvrednost: približno '+store.display_money(fx['total_eur_cents'],'EUR')+'; srednji kurs NBS '+fx['rate']+' ('+fx['date']+').']
     lines+=['','ISPORUKA']
     if delivery['method']=='pickup':lines.append('Lično preuzimanje — lokaciju i termin dogovoriti telefonom.')
     else:

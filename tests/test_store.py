@@ -23,6 +23,9 @@ import app as web
 import payments
 import addresses
 import specifications
+import rates
+from datetime import datetime
+from zoneinfo import ZoneInfo
 import notifications
 
 
@@ -37,6 +40,8 @@ class StoreTests(unittest.TestCase):
               description,specs,images,weight_kg,active,created_at,updated_at) VALUES(1,1,?,?,?,?,?,?,?,?,?,5,1,?,?)''',
               ('Test ThinkPad Čačak','test-thinkpad','Lenovo',30000,1,'Refurbished — odlično','Testirani uređaj',
                json.dumps({'Procesor':'Core i5','Memorija':'16 GB'}),'[]',store.now(),store.now()))
+        store.set_settings({'eur_rsd':'117.2','eur_rsd_date':datetime.now(ZoneInfo('Europe/Belgrade')).date().isoformat(),'eur_rsd_source':rates.SOURCE})
+        with store.connect(True) as c:c.execute('UPDATE products SET base_price_cents=28500 WHERE id=1')
         web.login_attempts.clear()
         self.client=web.app.test_client()
         self.publish=patch.object(web,'queue_publish');self.publish.start()
@@ -84,7 +89,7 @@ class StoreTests(unittest.TestCase):
         self.assertEqual(order['customer']['name'],'Петар Петровић')
         self.assertEqual(order['delivery']['address'],'Булевар Михаила Пупина 10З')
         self.assertEqual(order['delivery']['address_confirmation'],'phone_required')
-        self.assertEqual(order['total_minor'],30000+store.rsd_to_minor(600,store.settings()))
+        self.assertEqual(order['total_minor'],3516000+60000)
         self.assertEqual(store.product(1)['quantity'],0)
         page=self.client.get(response.location).get_data(as_text=True)
         self.assertIn('Pozvaćemo vas',page)
@@ -418,7 +423,7 @@ class StoreTests(unittest.TestCase):
         product=store.product(pid,admin=True)
         self.assertEqual(product['specs'],result['result']['specs'])
         self.assertEqual(product['category_slug'],'telefoni')
-        self.assertEqual(product['price_cents'],25000);self.assertEqual(product['quantity'],2)
+        self.assertEqual(product['price_cents'],26500);self.assertEqual(product['base_price_cents'],25000);self.assertEqual(product['quantity'],2)
         self.assertEqual(self.client.get('/admin/inventory-status').json[0]['status'],'completed')
 
     def test_background_ai_preserves_manual_edits_and_order_stock(self):
@@ -591,6 +596,88 @@ class StoreTests(unittest.TestCase):
         data['email']='invalid\nBcc: other@example.test'
         self.client.post('/admin/settings',data=data)
         self.assertEqual(store.settings()['email'],'orders@example.test')
+
+    def test_list_price_markup_rounds_up_without_rounding_intermediate_fee(self):
+        for base,listed in [(1,500),(476,500),(477,1000),(10000,10500),(10001,11000),(10100,11000),(20000,21000),(25000,26500),(99999,105000)]:
+            self.assertEqual(store.list_price(base),listed,(base,listed))
+
+    def test_admin_saves_base_and_immutable_list_but_public_sees_only_list(self):
+        html=self.login()
+        data={'csrf':self.hidden(html,'csrf'),'title':'Price controlled device','brand':'Dell','price':'101.01',
+              'category_id':'1','quantity':'1','list_price':'1','price_cents':'1','list_price_cents':'1'}
+        self.assertEqual(self.client.post('/admin/product',data=data).status_code,302)
+        product=store.products(admin=True)[0]
+        self.assertEqual(product['base_price_cents'],10101);self.assertEqual(product['price_cents'],11000)
+        page=self.client.get('/admin/?edit='+str(product['id'])).get_data(as_text=True)
+        self.assertIn('value="101.01"',page);self.assertRegex(page,r'id="list-price"[^>]*readonly')
+        import publisher
+        catalog=json.dumps(publisher.public_catalog())
+        self.assertNotIn('base_price',catalog)
+        self.assertNotIn('10101',catalog)
+
+    def test_price_migration_is_once_and_preserves_existing_orders(self):
+        self.order()
+        with tempfile.TemporaryDirectory() as directory:
+            path=Path(directory)/'legacy.sqlite3'
+            with sqlite3.connect(store.DB) as src,sqlite3.connect(path) as dst:src.backup(dst)
+            with patch.object(store,'DB',path):
+                with store.connect(True) as c:
+                    c.execute('ALTER TABLE products DROP COLUMN base_price_cents')
+                    c.execute('UPDATE products SET price_cents=10001')
+                    original=dict(c.execute('SELECT * FROM orders').fetchone())
+                    c.execute("CREATE TRIGGER fail_migration BEFORE UPDATE OF price_cents ON products BEGIN SELECT RAISE(ABORT,'interrupted'); END")
+                with self.assertRaises(sqlite3.IntegrityError):store.init_db()
+                with store.connect(True) as c:
+                    self.assertNotIn('base_price_cents',{r['name'] for r in c.execute('PRAGMA table_info(products)')})
+                    self.assertEqual(c.execute('SELECT price_cents FROM products').fetchone()[0],10001)
+                    c.execute('DROP TRIGGER fail_migration')
+                store.init_db()
+                self.assertEqual(store.product(1,admin=True)['base_price_cents'],10001)
+                self.assertEqual(store.product(1,admin=True)['price_cents'],11000)
+                store.init_db()
+                self.assertEqual(store.product(1,admin=True)['price_cents'],11000)
+                with store.connect() as c:self.assertEqual(dict(c.execute('SELECT * FROM orders').fetchone()),original)
+
+    def test_nbs_middle_parser_and_failed_refresh_keep_verified_cache(self):
+        today=datetime.now(ZoneInfo('Europe/Belgrade')).strftime('%d.%m.%Y')
+        document=f'<h6>FORMIRANA NA DAN {today}</h6><table><tr><td>EUR</td><td>978</td><td>EMU</td><td>1</td><td>117,4822</td></tr></table>'
+        parsed=rates.parse(document)
+        self.assertEqual(parsed['rate'],'117.4822');self.assertEqual(parsed['source'],rates.SOURCE)
+        with self.assertRaises(ValueError):rates.parse(document.replace('EUR','USD'))
+        before=rates.current()
+        with patch.object(rates.requests,'get',side_effect=OSError('offline')):
+            with self.assertRaises(OSError):rates.refresh()
+        self.assertEqual(rates.current(),before)
+
+    def test_checkout_uses_rsd_with_eur_explanation_and_immutable_rate_snapshot(self):
+        store.set_settings({'eur_rsd':'117.4822'})
+        order=self.order()
+        self.assertEqual(order['currency'],'RSD');self.assertEqual(order['subtotal_minor'],3524466)
+        self.assertEqual(order['pricing']['rate'],'117.4822');self.assertEqual(order['items'][0]['unit_eur_cents'],30000)
+        page=self.client.get('/order/'+order['token']+'/').get_data(as_text=True)
+        self.assertIn('Srednji kurs NBS',page);self.assertIn('RSD',page);self.assertIn('€',page)
+        before=copy.deepcopy(order)
+        store.set_settings({'eur_rsd':'119.0000'})
+        self.assertEqual(store.order_by_token(order['token']),before)
+
+    def test_unverified_or_stale_exchange_rate_cannot_create_new_order(self):
+        for value in [{'eur_rsd_source':''},{'eur_rsd_source':rates.SOURCE,'eur_rsd_date':'2000-01-01'}]:
+            store.set_settings(value)
+            with self.assertRaises(ValueError):self.order()
+        with store.connect() as c:self.assertEqual(c.execute('SELECT count(*) FROM orders').fetchone()[0],0)
+        self.assertEqual(store.product(1)['quantity'],1)
+
+    def test_rate_change_at_submit_requires_customer_to_review_new_total(self):
+        quote=store.quote([{'id':1}])
+        store.set_settings({'eur_rsd':'118.0000'})
+        with self.assertRaises(ValueError):store.create_order([{'id':1}],{}, {'country':'RS','method':'shipping','courier':'post-express'},'cod','rate-race',expected=(quote['currency'],quote['total_minor']))
+        self.assertEqual(store.product(1)['quantity'],1)
+
+    def test_currency_controls_removed_and_old_submissions_cannot_change_rate(self):
+        html=self.login();page=self.client.get('/admin/?tab=settings').get_data(as_text=True)
+        self.assertNotIn('name="currency"',page);self.assertNotIn('name="eur_rsd"',page)
+        self.client.post('/admin/settings',data={'csrf':self.hidden(html,'csrf'),'currency':'USD','eur_rsd':'1','courier_post-express':'yes'})
+        self.assertEqual(store.settings()['currency'],'EUR');self.assertEqual(store.settings()['eur_rsd'],'117.2')
 
     def test_homepage_browsing_precedes_marketing(self):
         html=self.client.get('/').get_data(as_text=True)

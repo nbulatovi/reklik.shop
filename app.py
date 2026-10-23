@@ -49,7 +49,7 @@ country_codes = {code for code, name in countries}
 app.jinja_env.filters['truncate_specs'] = lambda values: ' · '.join(str(v) for v in values[:3])
 app.jinja_env.filters['image_urls'] = lambda values, origin: [origin + '/media/' + x for x in values]
 app.jinja_env.filters['asset_urls'] = lambda values, origin: [origin + '/assets/' + x for x in values]
-app.jinja_env.filters['converted_price'] = lambda cents, cfg: f'{store.money_minor(cents, cfg) / 100:.2f}'
+app.jinja_env.filters['converted_price'] = lambda cents, cfg: f'{cents / 100:.2f}'
 app.jinja_env.filters['order_money'] = store.display_money
 
 
@@ -112,10 +112,21 @@ def template_context():
     return {'cfg': cfg, 'categories': store.categories(), 'base': '', 'live': True,
             'asset_version': str(max((store.ROOT/'assets/style.css').stat().st_mtime_ns,(store.ROOT/'assets/site.js').stat().st_mtime_ns)),
             'csrf': g.session['csrf'] if getattr(g, 'session', None) else '',
-            'money': lambda cents: store.display_money(store.money_minor(cents, cfg), cfg['currency']),
-            'minor_money': lambda cents: store.display_money(cents, cfg['currency']),
+            'money': lambda cents: store.display_money(cents,'EUR'),
+            'minor_money': lambda cents: store.display_money(cents,'RSD'),
+            'pricing_explanation': pricing_explanation,
             'warranty_money': lambda months: store.display_money(store.rsd_to_minor(cfg['warranty_rsd'][str(months)], cfg), cfg['currency']),
             'current_path': request.path, 'year': time.strftime('%Y'), 'admin': bool(getattr(g, 'session', None) and g.session['admin'])}
+
+
+def pricing_explanation(pricing):
+    return ('Približno '+store.display_money(pricing['total_eur_cents'],'EUR')+
+            '. Srednji kurs NBS: 1 EUR = '+pricing['rate'].replace('.',',')+
+            ' RSD; kursna lista '+datetime_date(pricing['date'])+'. Plaćanje je u dinarima.')
+
+
+def datetime_date(value):
+    return '.'.join(reversed(value.split('-')))
 
 
 @app.route('/health')
@@ -297,6 +308,7 @@ def shipping_quote():
             raise ValueError('Nepoznata zemlja.')
         q = store.quote(data['items'], country, data.get('method', 'shipping'), data.get('courier', 'post-express'))
         q['formatted'] = {key: store.display_money(q[key], q['currency']) for key in ['subtotal_minor', 'warranty_minor', 'shipping_minor', 'total_minor']}
+        q['pricing_explanation']=pricing_explanation(q['pricing'])
         return jsonify(q)
     except (ValueError, KeyError, TypeError) as e:
         return jsonify(error=str(e)), 422
@@ -456,11 +468,10 @@ def save_product():
         category_id, quantity = int(f['category_id']), int(f.get('quantity', 1))
         cfg = store.settings()
         value = store.Decimal(f['price'].replace(',', '.'))
-        if cfg['currency'] == 'RSD':
-            value /= store.Decimal(str(cfg['eur_rsd']))
-        cents = int((value * 100).quantize(store.Decimal('1'), rounding=store.ROUND_HALF_UP))
-        if not 1 <= cents <= 100000000 or not 0 <= quantity <= 10000:
+        base_cents = int((value * 100).quantize(store.Decimal('1'), rounding=store.ROUND_HALF_UP))
+        if not 1 <= base_cents <= 100000000 or not 0 <= quantity <= 10000:
             raise ValueError('Proverite cenu i količinu.')
+        cents=store.list_price(base_cents)
         images = [i for i in f.getlist('keep_images') if re.fullmatch(r'[a-f0-9]{24}\.webp', i) and (store.UPLOADS / i).is_file()]
         for upload in request.files.getlist('photos'):
             if not upload.filename:
@@ -517,6 +528,7 @@ def save_product():
                   specs,images,weight_kg,active,updated_at,created_at,slug) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
                   values + (store.now(), slug))
                 pid = c.execute('SELECT last_insert_rowid()').fetchone()[0]
+            c.execute('UPDATE products SET base_price_cents=? WHERE id=?',(base_cents,pid))
         store.audit('product_saved', pid)
         import specifications
         identity_changed=not existing or existing['title']!=title or existing['brand']!=f.get('brand','').strip()[:80]
@@ -568,9 +580,6 @@ def save_category():
 def save_settings():
     try:
         f = request.form
-        rate = store.Decimal(f.get('eur_rsd', '117.2'))
-        if not 1 <= rate <= 1000 or f.get('currency') not in ('EUR', 'RSD'):
-            raise ValueError('Proverite valutu i kurs.')
         cfg = store.settings()
         couriers = []
         for courier in cfg['couriers']:
@@ -602,7 +611,7 @@ def save_settings():
         email=f.get('email',cfg['email']).strip()
         if len(email)>180 or not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+',email):
             raise ValueError('Unesite ispravan kontakt email za obaveštenja o porudžbinama.')
-        store.set_settings({'brand': f.get('brand', cfg['brand']).strip()[:60], 'email':email, 'currency': f['currency'], 'eur_rsd': str(rate),
+        store.set_settings({'brand': f.get('brand', cfg['brand']).strip()[:60], 'email':email,
           'pickup_enabled': f.get('pickup_enabled') == 'yes', 'international_enabled': f.get('international_enabled') == 'yes',
           'payment_enabled': f.get('payment_enabled') == 'yes', 'indexing_enabled': f.get('indexing_enabled') == 'yes',
           'warranty_rsd': warranty, 'couriers': couriers, 'international_rates_rsd': rates,
@@ -630,7 +639,7 @@ def admin_order():
 @admin_only
 def payment_test():
     try:
-        order = payments.test_order(store.settings()['currency'])
+        order = payments.test_order('RSD')
         payments.create_checkout(order, request.host_url)
         return redirect('/order/' + order['token'] + '/')
     except ValueError as e:

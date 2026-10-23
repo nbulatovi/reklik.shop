@@ -20,6 +20,7 @@ DB = STATE / 'store.sqlite3'
 
 DEFAULTS = {
     'brand': 'ReKlik.shop', 'currency': 'EUR', 'eur_rsd': '117.2',
+    'eur_rsd_date':'','eur_rsd_source':'','eur_rsd_checked_at':0,
     'phone': '+38163697007', 'email': 'support@phonerepairteam.com',
     'pickup_address': '',
     'pickup_enabled': True, 'international_enabled': False,
@@ -122,9 +123,15 @@ def init_db():
           UNIQUE(order_id,event));
         CREATE INDEX IF NOT EXISTS order_notifications_pending ON order_notifications(status,next_attempt,locked_until,id);
         ''')
+        c.execute('BEGIN IMMEDIATE')
         product_columns = {row['name'] for row in c.execute('PRAGMA table_info(products)')}
         if 'revision' not in product_columns:
             c.execute('ALTER TABLE products ADD COLUMN revision INTEGER NOT NULL DEFAULT 1')
+        if 'base_price_cents' not in product_columns:
+            c.execute('ALTER TABLE products ADD COLUMN base_price_cents INTEGER NOT NULL DEFAULT 0')
+            c.execute('UPDATE products SET base_price_cents=price_cents,price_cents=((price_cents*105+49999)/50000)*500,revision=revision+1')
+        order_columns={row['name'] for row in c.execute('PRAGMA table_info(orders)')}
+        if 'pricing' not in order_columns:c.execute("ALTER TABLE orders ADD COLUMN pricing TEXT NOT NULL DEFAULT '{}'")
         category_columns = {row['name'] for row in c.execute('PRAGMA table_info(categories)')}
         if 'shipping_overrides' not in category_columns:
             c.execute("ALTER TABLE categories ADD COLUMN shipping_overrides TEXT NOT NULL DEFAULT '{}'")
@@ -137,6 +144,7 @@ def init_db():
             ]):
                 c.execute('INSERT INTO categories(name,slug,icon,shipping_rsd,weight_kg,sort_order) VALUES(?,?,?,?,?,?)',
                           (name, slug, icon, fee, weight, n))
+        c.commit()
     os.chmod(DB, 0o600)
 
 
@@ -145,6 +153,7 @@ def settings():
     with connect() as c:
         for row in c.execute('SELECT key,value FROM settings'):
             result[row['key']] = json.loads(row['value'])
+    result['currency']='EUR'
     return result
 
 
@@ -192,7 +201,7 @@ def unpack(row):
     if not row:
         return None
     row = dict(row)
-    for k in ['specs', 'images', 'items', 'customer', 'delivery', 'shipping_overrides']:
+    for k in ['specs', 'images', 'items', 'customer', 'delivery', 'shipping_overrides','pricing']:
         if k in row:
             row[k] = json.loads(row[k])
     if 'slug' in row and 'price_cents' in row:
@@ -237,6 +246,11 @@ def money_minor(eur_cents, cfg=None):
     return int(amount.quantize(Decimal('1'), rounding=ROUND_HALF_UP))
 
 
+def list_price(base_cents):
+    """5% on base, then ceiling to EUR 5 without intermediate cent rounding."""
+    return ((int(base_cents)*105+49999)//50000)*500
+
+
 def rsd_to_minor(rsd, cfg):
     amount = Decimal(str(rsd)) * 100
     if cfg['currency'] == 'EUR':
@@ -275,6 +289,9 @@ EUROPE = set('AT BE CY CZ DK EE FI FR DE GR IE IT LV LT LU MT NL PL PT SK ES SE 
 
 def quote(raw, country='RS', delivery='shipping', courier='post-express', cfg=None):
     cfg = cfg or settings()
+    import rates
+    fx=rates.current(cfg)
+    cfg=dict(cfg,currency='RSD')
     raw = normalize_items(raw)
     if country != 'RS' and not cfg['international_enabled']:
         raise ValueError('Međunarodna dostava trenutno nije dostupna. Isporuka u Srbiji i preuzimanje u radnji su dostupni.')
@@ -292,7 +309,7 @@ def quote(raw, country='RS', delivery='shipping', courier='post-express', cfg=No
             raise ValueError('Uređaj više nije dostupan u izabranoj količini. Osvežite porudžbinu.')
         unit = money_minor(p['price_cents'], cfg)
         extra = rsd_to_minor(cfg['warranty_rsd'][str(item['warranty'])], cfg) if item['warranty'] else 0
-        lines.append(dict(item, title=p['title'], slug=p['slug'], unit_minor=unit, warranty_minor=extra,
+        lines.append(dict(item, title=p['title'], slug=p['slug'], unit_minor=unit, unit_eur_cents=p['price_cents'], warranty_minor=extra,
                           image=p['images'][0] if p['images'] else None, condition=p['condition']))
         subtotal += unit * item['qty']
         warranty += extra * item['qty']
@@ -321,8 +338,11 @@ def quote(raw, country='RS', delivery='shipping', courier='post-express', cfg=No
             if weight > 5:
                 base *= Decimal(str(weight / 5))
             shipping = rsd_to_minor(base, cfg)
+    total=subtotal+warranty+shipping
+    fx['total_eur_cents']=int((Decimal(total)/Decimal(fx['rate'])).quantize(Decimal('1'),rounding=ROUND_HALF_UP))
     return {'items': lines, 'subtotal_minor': subtotal, 'warranty_minor': warranty,
             'shipping_minor': shipping, 'total_minor': subtotal + warranty + shipping,
+            'pricing':fx,
             'currency': cfg['currency'], 'country': country, 'method': delivery,
             'courier': courier if delivery != 'pickup' else 'pickup', 'weight_kg': weight,
             'days': cfg['shipping_days'] if country == 'RS' else cfg['international_days']}
@@ -374,6 +394,7 @@ def create_order(raw, customer, delivery, method, idem, test=False, expected=Non
            now() + 1800 if method == 'card' else None, int(test)))
         if not test:
             c.execute("INSERT INTO order_notifications(order_id,event,created_at) VALUES(?,'new_order',?)",(oid,now()))
+        c.execute('UPDATE orders SET pricing=? WHERE id=?',(json.dumps(q['pricing']),oid))
         return unpack(c.execute('SELECT * FROM orders WHERE id=?', (oid,)).fetchone())
 
 

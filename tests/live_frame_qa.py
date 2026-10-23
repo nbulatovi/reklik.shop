@@ -20,7 +20,10 @@ with tempfile.TemporaryDirectory(prefix='reklik-frame-') as temporary:
     state=Path(temporary)
     env=dict(os.environ,REKLIK_STATE=temporary,REKLIK_PORT='4342',REKLIK_SECURE_COOKIES='1')
     fixture='''
-import store,json
+import store,json,rates
+from datetime import datetime
+from zoneinfo import ZoneInfo
+store.set_settings({'eur_rsd':'117.2','eur_rsd_date':datetime.now(ZoneInfo('Europe/Belgrade')).date().isoformat(),'eur_rsd_source':rates.SOURCE})
 from PIL import Image
 from werkzeug.security import generate_password_hash
 store.init_db()

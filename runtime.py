@@ -52,6 +52,8 @@ def server():
     specifications.recover()
     import notifications
     threading.Thread(target=notifications.run,daemon=True,name='order-emails').start()
+    import rates
+    threading.Thread(target=rates.run,daemon=True,name='nbs-rates').start()
     threading.Thread(target=maintenance,daemon=True).start()
     print('ReKlik server listening on 127.0.0.1:4340',flush=True)
     serve(app,host='127.0.0.1',port=int(os.environ.get('REKLIK_PORT',4340)),threads=12,max_request_body_size=35*1024*1024)

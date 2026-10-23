@@ -22,7 +22,10 @@ import json
 from pathlib import Path
 from PIL import Image
 from werkzeug.security import generate_password_hash
-import store
+import store,rates
+from datetime import datetime
+from zoneinfo import ZoneInfo
+store.set_settings({'eur_rsd':'117.2','eur_rsd_date':datetime.now(ZoneInfo('Europe/Belgrade')).date().isoformat(),'eur_rsd_source':rates.SOURCE})
 store.init_db()
 (store.STATE/'private.json').write_text(json.dumps({'secret':'browser-test-secret','password_hash':generate_password_hash('browser-test-password')}))
 Image.new('RGB',(1200,900),(218,220,223)).save(store.STATE/'camera.jpg')
@@ -60,6 +63,8 @@ Image.new('RGB',(3200,2400),(190,193,198)).save(store.STATE/'camera-large.jpg')
             page.locator('[name=title]').fill('Lenovo ThinkPad T14 — mobilni test')
             page.locator('[name=brand]').fill('Lenovo')
             page.locator('[name=price]').fill('300')
+            assert page.locator('[data-list-price]').input_value().replace('\xa0',' ').replace('\u202f',' ')=='315 €'
+            assert page.locator('[data-list-price]').get_attribute('readonly') is not None
             page.locator('[name=quantity]').fill('3')
             page.locator('[name=specs]').fill('Procesor: Intel Core i5\nMemorija: 16 GB\nSkladište: 512 GB SSD')
             page.locator('textarea[name=description]').fill('Testiran i spreman za rad. Fotografija je isključivo testni uzorak.')
@@ -123,7 +128,7 @@ Image.new('RGB',(3200,2400),(190,193,198)).save(store.STATE/'camera-large.jpg')
             page.locator('[name=city]').fill('Горња Добриња')
             page.locator('[name=courier]').select_option('aks')
             page.wait_for_function('() => !document.querySelector("[data-order-submit]").disabled')
-            assert page.locator('[data-quote=shipping_minor]').inner_text().replace('\xa0',' ').replace('\u202f',' ') == '7 €'
+            assert page.locator('[data-quote=shipping_minor]').inner_text().replace('\xa0',' ').replace('\u202f',' ') == '820 RSD'
             page.locator('[name=payment_method][value=cod]').check()
             page.locator('[name=terms]').check()
             page.screenshot(path='/tmp/reklik-checkout-mobile.png',full_page=True)
@@ -131,7 +136,7 @@ Image.new('RGB',(3200,2400),(190,193,198)).save(store.STATE/'camera-large.jpg')
             page.wait_for_url('**/order/**')
             assert 'Pozvaćemo vas' in page.locator('body').inner_text()
             assert 'Горња Добриња' in page.locator('body').inner_text()
-            assert '307 €' in page.locator('.summary-lines .total').inner_text()
+            assert '37.738 RSD' in page.locator('.summary-lines .total').inner_text()
             layout('mobile COD confirmation')
             page.screenshot(path='/tmp/reklik-order-mobile.png',full_page=True)
             confirmation=page.url
