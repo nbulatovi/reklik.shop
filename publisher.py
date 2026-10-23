@@ -25,7 +25,8 @@ def public_catalog(cfg=None):
         rows.append({key: p[key] for key in ['id','title','slug','brand','category_name','category_slug','condition','images','quantity','catalog_image']} |
                     {'price_minor': p['price_cents']})
     return {'currency': cfg['currency'], 'products': rows,
-            'warranty_minor': {str(n): store.rsd_to_minor(cfg['warranty_rsd'][str(n)], cfg) for n in (1,2,3)}}
+            'included_warranty_days':cfg['included_warranty_days'],
+            'warranty_minor':cfg['warranty_eur_cents']}
 
 
 def export():

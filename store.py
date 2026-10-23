@@ -25,7 +25,8 @@ DEFAULTS = {
     'pickup_address': '',
     'pickup_enabled': True, 'international_enabled': False,
     'shipping_days': '1–3 radna dana', 'handling_days': '1–2 radna dana',
-    'warranty_rsd': {'1': 600, '2': 1200, '3': 1800},
+    'included_warranty_days':14,
+    'warranty_eur_cents': {'1':1000,'2':2000,'3':3000},
     'couriers': [
         {'id': 'post-express', 'name': 'Post Express', 'enabled': True, 'multiplier': 1,
          'rates': [[.5,420],[1,450],[2,500],[5,600],[10,800],[20,1100]], 'tariff_date':'2026-01-01'},
@@ -308,8 +309,10 @@ def quote(raw, country='RS', delivery='shipping', courier='post-express', cfg=No
         if not p or p['quantity'] < product_quantities[item['id']]:
             raise ValueError('Uređaj više nije dostupan u izabranoj količini. Osvežite porudžbinu.')
         unit = money_minor(p['price_cents'], cfg)
-        extra = rsd_to_minor(cfg['warranty_rsd'][str(item['warranty'])], cfg) if item['warranty'] else 0
+        extra_eur=cfg['warranty_eur_cents'][str(item['warranty'])] if item['warranty'] else 0
+        extra = money_minor(extra_eur,cfg)
         lines.append(dict(item, title=p['title'], slug=p['slug'], unit_minor=unit, unit_eur_cents=p['price_cents'], warranty_minor=extra,
+                          warranty_eur_cents=extra_eur,included_warranty_days=cfg['included_warranty_days'],
                           image=p['images'][0] if p['images'] else None, condition=p['condition']))
         subtotal += unit * item['qty']
         warranty += extra * item['qty']
@@ -340,6 +343,7 @@ def quote(raw, country='RS', delivery='shipping', courier='post-express', cfg=No
             shipping = rsd_to_minor(base, cfg)
     total=subtotal+warranty+shipping
     fx['total_eur_cents']=int((Decimal(total)/Decimal(fx['rate'])).quantize(Decimal('1'),rounding=ROUND_HALF_UP))
+    fx['included_warranty_days']=cfg['included_warranty_days']
     return {'items': lines, 'subtotal_minor': subtotal, 'warranty_minor': warranty,
             'shipping_minor': shipping, 'total_minor': subtotal + warranty + shipping,
             'pricing':fx,

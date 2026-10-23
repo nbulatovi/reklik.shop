@@ -263,8 +263,28 @@ class StoreTests(unittest.TestCase):
     def test_warranty_is_optional_and_itemized(self):
         cfg=store.settings();cfg['currency']='RSD'
         q=store.quote([{'id':1,'warranty':3}],cfg=cfg)
-        self.assertEqual(q['warranty_minor'],180000)
+        self.assertEqual(q['warranty_minor'],351600)
         self.assertEqual(store.quote([{'id':1}],cfg=cfg)['warranty_minor'],0)
+
+    def test_warranty_is_14_days_plus_fixed_eur_monthly_fees(self):
+        for months in (1,2,3):
+            before=store.quote([{'id':1,'warranty':months}])
+            self.assertEqual(before['items'][0]['included_warranty_days'],14)
+            self.assertEqual(before['items'][0]['warranty_eur_cents'],months*1000)
+            self.assertEqual(before['warranty_minor'],months*117200)
+            with store.connect(True) as c:c.execute('UPDATE products SET price_cents=990000 WHERE id=1')
+            self.assertEqual(store.quote([{'id':1,'warranty':months}])['warranty_minor'],before['warranty_minor'])
+        import publisher
+        self.assertEqual(publisher.public_catalog()['warranty_minor'],{'1':1000,'2':2000,'3':3000})
+        self.assertEqual(store.quote([{'id':1}])['pricing']['included_warranty_days'],14)
+
+    def test_saved_warranty_coverage_and_cost_do_not_change_with_settings(self):
+        delivery={'country':'RS','method':'shipping','courier':'post-express','city':'Selo'}
+        order=store.create_order([{'id':1,'warranty':2}],{},delivery,'cod','warranty-snapshot')
+        store.set_settings({'included_warranty_days':30,'warranty_eur_cents':{'1':5000,'2':6000,'3':7000}})
+        saved=store.order_by_token(order['token'])
+        self.assertEqual(saved,order);self.assertEqual(saved['pricing']['included_warranty_days'],14)
+        self.assertEqual(saved['items'][0]['warranty_eur_cents'],2000)
 
     def test_public_admin_and_post_protection(self):
         self.assertEqual(self.client.get('/admin/').status_code,302)

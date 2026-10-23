@@ -20,6 +20,7 @@ def content(order,event):
            'KUPAC',customer.get('name',''),f"Telefon: {customer.get('phone','')}",f"Email: {customer.get('email','')}",'', 'UREĐAJI']
     for item in order['items']:
         lines.append(f"{item['qty']} × {item['title']} — {store.display_money(item['unit_minor']*item['qty'],order['currency'])}")
+        if item.get('included_warranty_days'):lines.append(f"  Uključena garancija: {item['included_warranty_days']} dana")
         if item.get('warranty'):lines.append(f"  Dodatno pokriće: {item['warranty']} mes.")
     for label,key in [('Uređaji','subtotal_minor'),('Dodatna garancija','warranty_minor'),('Dostava','shipping_minor'),('UKUPNO','total_minor')]:
         lines.append(f"{label}: {store.display_money(order[key],order['currency'])}")

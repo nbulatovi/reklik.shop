@@ -115,7 +115,7 @@ def template_context():
             'money': lambda cents: store.display_money(cents,'EUR'),
             'minor_money': lambda cents: store.display_money(cents,'RSD'),
             'pricing_explanation': pricing_explanation,
-            'warranty_money': lambda months: store.display_money(store.rsd_to_minor(cfg['warranty_rsd'][str(months)], cfg), cfg['currency']),
+            'warranty_money': lambda months: store.display_money(cfg['warranty_eur_cents'][str(months)],'EUR'),
             'current_path': request.path, 'year': time.strftime('%Y'), 'admin': bool(getattr(g, 'session', None) and g.session['admin'])}
 
 
@@ -598,7 +598,10 @@ def save_settings():
             couriers[-1]['rates'] = new_rates
         if not any(c['enabled'] for c in couriers):
             raise ValueError('Ostavite bar jednu kurirsku službu uključenu.')
-        warranty = {str(n): int(f.get('warranty_' + str(n), n*600)) for n in (1, 2, 3)}
+        warranty={}
+        for n in (1,2,3):
+            value=store.Decimal(str(f.get('warranty_'+str(n),cfg['warranty_eur_cents'][str(n)]/100)).replace(',','.'))
+            warranty[str(n)]=int((value*100).quantize(store.Decimal('1'),rounding=store.ROUND_HALF_UP))
         if any(v < 0 or v > 1000000 for v in warranty.values()):
             raise ValueError('Proverite cenu dodatne garancije.')
         site_url = f.get('site_url', cfg['site_url']).rstrip('/')
@@ -614,7 +617,7 @@ def save_settings():
         store.set_settings({'brand': f.get('brand', cfg['brand']).strip()[:60], 'email':email,
           'pickup_enabled': f.get('pickup_enabled') == 'yes', 'international_enabled': f.get('international_enabled') == 'yes',
           'payment_enabled': f.get('payment_enabled') == 'yes', 'indexing_enabled': f.get('indexing_enabled') == 'yes',
-          'warranty_rsd': warranty, 'couriers': couriers, 'international_rates_rsd': rates,
+          'warranty_eur_cents': warranty, 'couriers': couriers, 'international_rates_rsd': rates,
           'shipping_days': f.get('shipping_days', cfg['shipping_days'])[:100], 'international_days': f.get('international_days', cfg['international_days'])[:150],
           'site_url': site_url, 'hero_title': f.get('hero_title', cfg['hero_title'])[:160], 'hero_text': f.get('hero_text', cfg['hero_text'])[:600]})
         store.audit('settings_changed')
