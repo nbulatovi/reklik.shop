@@ -153,7 +153,9 @@
         const res = await fetch('/api/quote', {method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':form.get('csrf')},body:JSON.stringify({items:JSON.parse(form.get('items')),country:form.get('country'),method:form.get('delivery_method'),courier:form.get('courier')})});
         const data = await res.json(); if (seq !== sequence) return; if (!res.ok) throw Error(data.error || 'Proverite dostavu.');
         $$('[data-quote]').forEach(el => {el.textContent = data.formatted[el.dataset.quote];});
+        data.items.forEach((line,index)=>{const amount=$('[data-item-quote="'+index+'"]',checkout),eur=$('[data-item-eur="'+index+'"]',checkout);if(amount)amount.textContent=money(line.unit_minor*line.qty,data.currency);if(eur)eur.textContent=money(line.unit_eur_cents*line.qty,'EUR');});
         $('[data-delivery-days]').textContent = data.days;
+        if($('[data-pricing-explanation]'))$('[data-pricing-explanation]').textContent=data.pricing_explanation;
         checkout.elements.quoted_total.value = data.total_minor; checkout.elements.quoted_currency.value = data.currency;
         $('[data-quote-error]').hidden = true; $('[data-order-submit]').disabled = false;
       } catch(e) { if (seq !== sequence) return; $('[data-quote-error]').hidden = false; $('[data-quote-error]').textContent = e.message || 'Obračun nije dostupan. Osvežite stranicu.'; }
@@ -259,6 +261,14 @@
   const aiForm = $('[data-ai-form]');
   const inventory=$('[data-inventory-form]');
   if(inventory){
+    const price=inventory.elements.price,listing=$('[data-list-price]');
+    const previewPrice=()=>{
+      const match=/^(\d+)(?:[.,](\d{1,2}))?$/.exec(price.value.trim());
+      if(!match){listing.value='';return;}
+      const cents=Number(match[1])*100+Number((match[2]||'').padEnd(2,'0'));
+      listing.value=cents>0?money(Math.ceil(cents*105/50000)*500,'EUR'):'';
+    };
+    price.addEventListener('input',previewPrice);previewPrice();
     const model=inventory.elements.title,brand=inventory.elements.brand,status=$('[data-spec-status]'),save=$('[data-inventory-save]');
     let timer,version=0,original=brand.value.trim()+'|'+model.value.trim(),editedSpecs=false,editedDescription=false,editedCategory=false;
     inventory.elements.specs.addEventListener('input',()=>{editedSpecs=true;inventory.elements.auto_specs.value='0';});
