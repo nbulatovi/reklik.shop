@@ -357,10 +357,26 @@ class StoreTests(unittest.TestCase):
     def test_refurbished_seo_and_xss(self):
         store.set_settings({'indexing_enabled':True})
         with store.connect(True) as c:c.execute('UPDATE products SET title=? WHERE id=1',('<script>alert(1)</script>',))
-        html=self.client.get('/proizvod/test-thinkpad/').get_data(as_text=True)
+        html=self.client.get('/proizvod/1/').get_data(as_text=True)
         self.assertIn('RefurbishedCondition',html);self.assertIn('application/ld+json',html)
         self.assertNotIn('<h1><script>',html);self.assertIn('&lt;script&gt;',html)
         self.assertNotIn('name="robots" content="noindex',html)
+
+    def test_product_identity_urls_survive_renaming_and_hide_old_aliases(self):
+        alias=self.client.get('/proizvod/test-thinkpad/')
+        self.assertEqual(alias.status_code,301);self.assertEqual(alias.location,'/proizvod/1/')
+        self.assertEqual(self.client.get('/proizvod/01/').location,'/proizvod/1/')
+        with store.connect(True) as c:c.execute("UPDATE products SET title='Changed product name' WHERE id=1")
+        response=self.client.get('/proizvod/1/')
+        self.assertEqual(response.status_code,200)
+        html=response.get_data(as_text=True)
+        self.assertIn('Changed product name',html);self.assertIn('https://reklik.shop/proizvod/1/',html)
+        self.assertNotIn('https://reklik.shop/proizvod/test-thinkpad/',html)
+        import publisher
+        self.assertEqual(publisher.public_catalog()['products'][0]['slug'],'1')
+        with store.connect(True) as c:c.execute('UPDATE products SET active=0 WHERE id=1')
+        self.assertEqual(self.client.get('/proizvod/1/').status_code,404)
+        self.assertEqual(self.client.get('/proizvod/test-thinkpad/').status_code,404)
 
     def test_search_accepts_scripts_and_ascii(self):
         for query in ['Čačak','Cacak','Чачак','Chachak']:
@@ -543,12 +559,12 @@ class StoreTests(unittest.TestCase):
         with Image.open(store.UPLOADS/image) as im:self.assertEqual(im.size,(1600,1200))
         with Image.open(store.ORIGINALS/image.replace('.webp','.jpg')) as im:self.assertEqual(im.size,(3200,2400))
         self.assertEqual(product['active'],1);self.assertEqual(product['condition'],inventory_rules.GRADES[1])
-        page=self.client.get('/proizvod/'+product['slug']+'/').get_data(as_text=True)
+        page=self.client.get('/proizvod/'+str(product['id'])+'/').get_data(as_text=True)
         self.assertIn('/media/full/',page);self.assertIn('data-photo-zoom',page)
         with self.client.get('/media/full/'+image.replace('.webp','.jpg')) as response:self.assertEqual(response.status_code,200)
         self.client.post('/admin/product/'+str(product['id'])+'/visibility',data={'csrf':csrf,'visible':'0'})
         self.assertIsNone(store.product(product['id']));self.assertIsNotNone(store.product(product['id'],admin=True))
-        self.assertEqual(self.client.get('/proizvod/'+product['slug']+'/').status_code,404)
+        self.assertEqual(self.client.get('/proizvod/'+str(product['id'])+'/').status_code,404)
         import publisher
         self.assertNotIn(product['id'],[p['id'] for p in publisher.public_catalog()['products']])
         self.client.post('/admin/product/'+str(product['id'])+'/visibility',data={'csrf':csrf,'visible':'1'})
@@ -588,7 +604,7 @@ class StoreTests(unittest.TestCase):
         page=self.client.get('/admin/').get_data(as_text=True)
         self.assertEqual(page.count('type="radio" name="condition"'),6)
         with store.connect(True) as c:c.execute("UPDATE products SET condition='Novo' WHERE id=1")
-        self.assertIn('https://schema.org/NewCondition',self.client.get('/proizvod/test-thinkpad/').get_data(as_text=True))
+        self.assertIn('https://schema.org/NewCondition',self.client.get('/proizvod/1/').get_data(as_text=True))
 
     def test_auth_refreshes_expired_copy_and_keeps_newer_login(self):
         from ai_editor import sync_auth

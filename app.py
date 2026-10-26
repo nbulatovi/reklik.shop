@@ -166,12 +166,21 @@ def category(slug):
     return render_template('catalog.html', products=store.products(category=slug), category=cat, query='', page_title=cat['name'] + ' — sertifikovano refabrikovano')
 
 
-@app.route('/proizvod/<slug>/')
-def product(slug):
-    p = store.product(slug)
+@app.route('/proizvod/<int:pid>/')
+def product(pid):
+    p = store.product(pid)
     if not p:
         abort(404)
+    canonical='/proizvod/'+str(p['id'])+'/'
+    if request.path!=canonical:return redirect(canonical,code=301)
     return render_template('product.html', product=p, page_title=p['title'])
+
+
+@app.route('/proizvod/<slug>/')
+def legacy_product(slug):
+    p=store.product(slug)
+    if not p:abort(404)
+    return redirect('/proizvod/'+str(p['id'])+'/',code=301)
 
 
 @app.route('/views/product/<int:pid>')

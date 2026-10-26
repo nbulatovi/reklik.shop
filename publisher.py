@@ -1,5 +1,6 @@
 """Export complete crawlable HTML and publish it to GitHub Pages."""
 import json
+from html import escape as html_escape
 import fcntl
 import os
 import shutil
@@ -22,8 +23,8 @@ def public_catalog(cfg=None):
     cfg = cfg or store.settings()
     rows = []
     for p in store.products():
-        rows.append({key: p[key] for key in ['id','title','slug','brand','category_name','category_slug','condition','images','quantity','catalog_image']} |
-                    {'price_minor': p['price_cents']})
+        rows.append({key: p[key] for key in ['id','title','brand','category_name','category_slug','condition','images','quantity','catalog_image']} |
+                    {'price_minor': p['price_cents'],'slug':str(p['id'])})
     return {'currency': cfg['currency'], 'products': rows,
             'included_warranty_days':cfg['included_warranty_days'],
             'warranty_minor':cfg['warranty_eur_cents']}
@@ -63,7 +64,12 @@ def export():
         page('/kategorija/' + cat['slug'] + '/', 'catalog.html', products=store.products(category=cat['slug']), category=cat,
              query='', page_title=cat['name'] + ' — sertifikovano refabrikovano')
     for p in all_products:
-        page('/proizvod/' + p['slug'] + '/', 'product.html', product=p, page_title=p['title'])
+        path='/proizvod/'+str(p['id'])+'/'
+        page(path,'product.html',product=p,page_title=p['title'])
+        if p['slug']!=str(p['id']):
+            alias=temp/'proizvod'/p['slug']/'index.html';alias.parent.mkdir(parents=True,exist_ok=True)
+            target=html_escape(base+path,quote=True);canonical=html_escape(cfg['canonical_url']+path,quote=True)
+            alias.write_text('<!doctype html><html lang="sr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex, follow"><meta http-equiv="refresh" content="0;url='+target+'"><link rel="canonical" href="'+canonical+'"><title>Otvaranje proizvoda — ReKlik.shop</title></head><body><p><a href="'+target+'">Otvori proizvod</a></p></body></html>')
     titles = {'o-nama':'Nova prilika za odličnu tehnologiju','dostava':'Dostava i preuzimanje',
               'garancija':'Kvalitet, prava kupaca i dodatna garancija','uslovi':'Podaci o prodavcu i uslovi kupovine',
               'privatnost':'Privatnost i podaci','povracaj':'Povraćaj i reklamacije','kontakt':'Tu smo za vas'}

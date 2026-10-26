@@ -21,13 +21,13 @@
 
 {% macro product_card(p) -%}
 <article class="product-card" data-id="{{p.id}}" data-updated="{{p.updated_at}}" data-category-group="{{p.category_slug if p.category_slug in ['laptopovi','telefoni','tableti'] else 'other'}}" data-search="{{ (p.title ~ ' ' ~ p.brand ~ ' ' ~ p.description ~ ' ' ~ p.specs.values()|join(' '))|lower }}" data-price="{{p.price_cents|converted_price(cfg)}}" data-brand="{{p.brand}}" data-stock="{{p.quantity}}">
- <a class="product-image" href="{{base}}/proizvod/{{p.slug}}/">
+ <a class="product-image" href="{{base}}/proizvod/{{p.id}}/">
   {% if p.images %}<img src="{{base}}/media/{{p.images[0]}}" alt="{{p.title}} — fotografija uređaja" width="480" height="380" loading="lazy" decoding="async">{% elif p.catalog_image %}<img src="{{base}}/assets/{{p.catalog_image}}" alt="{{p.title}}" width="480" height="380" loading="eager" decoding="async">{% else %}{{icon(p.icon,100)}}{% endif %}
  </a>
- <div class="product-body"><span class="eyebrow">{{p.category_name}}</span><h3><a href="{{base}}/proizvod/{{p.slug}}/">{{p.title}}</a></h3>
+ <div class="product-body"><span class="eyebrow">{{p.category_name}}</span><h3><a href="{{base}}/proizvod/{{p.id}}/">{{p.title}}</a></h3>
  <p class="condition-tag">{{p.condition}}</p>
  <p class="product-specs">{{ p.specs.values()|list|truncate_specs }}</p>
  <div class="product-bottom"><strong>{{money(p.price_cents)}}</strong><span class="stock {{'sold' if p.quantity < 1 else ''}}">{{'Na stanju' if p.quantity > 0 else 'Prodato'}}</span></div>
- {% if current_path == '/' %}<a class="button button-pink button-full" href="{{base}}/proizvod/{{p.slug}}/">Više informacija {{icon('arrow',17)}}</a>{% else %}<a class="button button-dark button-full" href="{{base}}/checkout/?buy={{p.id}}" {% if p.quantity < 1 %}aria-disabled="true" tabindex="-1"{% endif %}>Kupi sada {{icon('arrow',17)}}</a>{% endif %}</div>
+ {% if current_path == '/' %}<a class="button button-pink button-full" href="{{base}}/proizvod/{{p.id}}/">Više informacija {{icon('arrow',17)}}</a>{% else %}<a class="button button-dark button-full" href="{{base}}/checkout/?buy={{p.id}}" {% if p.quantity < 1 %}aria-disabled="true" tabindex="-1"{% endif %}>Kupi sada {{icon('arrow',17)}}</a>{% endif %}</div>
 </article>
 {%- endmacro %}

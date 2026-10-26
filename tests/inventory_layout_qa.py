@@ -75,7 +75,7 @@ with store.connect(True) as c:
                     assert page.locator('.product-card').evaluate_all('els=>els.every(e=>e.querySelector(".condition-tag").getBoundingClientRect().top>=e.querySelector(".product-image").getBoundingClientRect().bottom-1)')
                     layout(str(width)+page.url)
                 for n in range(1,7):
-                    page.goto(public+'/proizvod/qa-grade-'+str(n)+'/')
+                    page.goto(public+'/proizvod/'+str(n)+'/')
                     readable(page.locator('.device-condition'),14)
                     assert page.locator('.device-condition').evaluate('e=>e.getBoundingClientRect().top>=document.querySelector(".device-main-image").getBoundingClientRect().bottom-1')
                     layout(str(width)+page.url)
@@ -106,14 +106,15 @@ with store.connect(True) as c:
             for origin in (backend,public):
                 for path in ('/','/katalog/','/kategorija/laptopovi/','/catalog.json'):
                     text=urlopen(origin+path).read().decode()
-                    assert 'QA uređaj 4' not in text and '/proizvod/qa-grade-4/' not in text,(origin,path)
-                try:urlopen(origin+'/proizvod/qa-grade-4/')
+                    assert 'QA uređaj 4' not in text and '/proizvod/4/' not in text,(origin,path)
+                try:urlopen(origin+'/proizvod/4/')
                 except HTTPError as e:assert e.code==404
                 else:raise AssertionError('Hidden product URL still exists: '+origin)
-            assert 'qa-grade-4' not in (state/'public/sitemap.xml').read_text()
+            assert '/proizvod/4/' not in (state/'public/sitemap.xml').read_text()
+            assert not (state/'public/proizvod/4').exists()
             assert not (state/'public/proizvod/qa-grade-4').exists()
             for document in (state/'public').rglob('*.html'):
-                assert '/proizvod/qa-grade-4/' not in document.read_text(),document
+                assert '/proizvod/4/' not in document.read_text(),document
             page.goto(public+'/korpa/')
             page.locator('.cart-item').wait_for()
             assert page.locator('.cart-item').count()==1
@@ -129,10 +130,10 @@ with store.connect(True) as c:
             page.locator('form[action="/admin/product/4/visibility"] button').click()
             page.wait_for_url('**/admin/?**')
             export()
-            page.goto(public+'/proizvod/qa-grade-4/')
+            page.goto(public+'/proizvod/4/')
             assert page.locator('h1').inner_text()=='QA uređaj 4'
             page.goto(public+'/katalog/');assert page.locator('.product-card').count()==6
-            assert 'qa-grade-4' in (state/'public/sitemap.xml').read_text()
+            assert '/proizvod/4/' in (state/'public/sitemap.xml').read_text()
             assert not errors,errors
             browser.close()
         report={'passed':True,'widths':[320,390,768,1440],'all_six_grades_checked':True,'surfaces':['home','catalog','category','product','admin choices','admin list'],

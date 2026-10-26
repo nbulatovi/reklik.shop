@@ -213,3 +213,15 @@ body p{font-size:16px!important;line-height:1.7}body small{font-size:14px!import
 .admin-layout input[type=file]{min-width:0;max-width:100%}
 
 .inventory-bulk{margin:0 0 16px}.inventory-bulk .button{width:100%;font-size:16px!important;white-space:normal;line-height:1.4;min-height:48px}
+
+/* Keep the original purchase form usable throughout the product page. */
+.item-page{padding-bottom:calc(84px + env(safe-area-inset-bottom,0px))}
+.item-page:has(.device-buy-actions .cart-feedback:not(:empty)){padding-bottom:calc(116px + env(safe-area-inset-bottom,0px))}
+.item-page .device-buy-actions{position:fixed;inset:auto 0 0;z-index:60;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:6px 12px;margin:0;padding:12px max(16px,calc((100vw - 920px)/2),env(safe-area-inset-left,0px)) calc(12px + env(safe-area-inset-bottom,0px));background:#fff;border-top:1px solid #e8dfd6;box-shadow:0 -4px 18px #29292912;border-radius:0}
+.item-page .device-buy-actions .button{width:100%;min-width:0;margin:0}
+.item-page .device-buy-actions .cart-feedback{grid-column:1/-1;grid-row:2;margin:0;text-align:center;color:#41612e;font-size:14px!important;line-height:1.4!important}
+.item-page :is(select,a,button){scroll-margin-bottom:calc(124px + env(safe-area-inset-bottom,0px))}
+@media(max-width:600px){.item-page .device-buy-actions{padding:8px max(12px,env(safe-area-inset-left,0px)) calc(8px + env(safe-area-inset-bottom,0px));gap:5px 10px}}
+@media(max-width:350px){.item-page .device-buy-actions{padding-left:10px;padding-right:10px;column-gap:8px}}
+@media print{.item-page .device-buy-actions{display:none}.item-page{padding-bottom:0}}
+.item-page .device-delivery{grid-row:2}
