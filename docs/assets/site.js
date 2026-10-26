@@ -28,7 +28,7 @@
     const item = items.find(x => x.id === id && x.warranty === warranty);
     if (item) item.qty = Math.min(20, item.qty + 1); else items.push({id, warranty, qty: 1});
     saveCart(items);
-    const message = $('[data-cart-feedback]'); if (message) message.textContent = 'Dodato u korpu. Možete nastaviti kupovinu.';
+    const message = $('[data-cart-feedback]'); if (message) message.textContent = 'Dodato u korpu.';
   }));
   $$('[data-thumbnail]').forEach(button => button.addEventListener('click', () => {
     const img = $('[data-main-image]'); if (!img) return;
@@ -114,7 +114,7 @@
         items.forEach((line, index) => {
           const p = data.products.find(p => p.id === Number(line.id)); if (!p) return;
           const row = node('article', {class: 'cart-item'}), img = node('img', {src: p.images.length ? base + '/media/' + p.images[0] : p.catalog_image ? base+'/assets/'+p.catalog_image : base + '/assets/favicon.svg', alt: p.title, width: '90', height: '80'});
-          const details = node('div'), title = node('h3'); title.append(node('a', {href: base + '/proizvod/' + p.slug + '/'}, p.title)); details.append(title);
+          const details = node('div'), title = node('h3'); title.append(node('a', {href: base + '/proizvod/' + p.id + '/'}, p.title)); details.append(title);
           const qty = node('input', {type: 'number', min: '1', max: String(Math.max(1, Math.min(20,p.quantity))), value: String(line.qty), 'aria-label': 'Količina za ' + p.title});
           qty.addEventListener('change', () => { const next = readCart(); next[index].qty = Math.max(1, Math.min(20,Number(qty.value)||1)); saveCart(next); render(); });
           const choices = node('select', {'aria-label': 'Dodatna garancija za ' + p.title});
