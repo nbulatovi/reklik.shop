@@ -130,6 +130,11 @@ def init_db():
         CREATE TABLE IF NOT EXISTS migrations(name TEXT PRIMARY KEY,applied_at INTEGER NOT NULL);
         ''')
         c.execute('BEGIN IMMEDIATE')
+        ai_columns={row['name'] for row in c.execute('PRAGMA table_info(product_ai)')}
+        if 'attempts' not in ai_columns:c.execute('ALTER TABLE product_ai ADD COLUMN attempts INTEGER NOT NULL DEFAULT 1')
+        if 'retry_at' not in ai_columns:
+            c.execute('ALTER TABLE product_ai ADD COLUMN retry_at INTEGER NOT NULL DEFAULT 0')
+            c.execute("UPDATE product_ai SET retry_at=? WHERE status='failed'",(now()+60,))
         product_columns = {row['name'] for row in c.execute('PRAGMA table_info(products)')}
         if 'revision' not in product_columns:
             c.execute('ALTER TABLE products ADD COLUMN revision INTEGER NOT NULL DEFAULT 1')
@@ -231,10 +236,24 @@ def unpack(row):
     return row
 
 
+def showcase(rows):
+    """Round robin the four storefront groups, skipping exhausted groups."""
+    from collections import deque
+    buckets={key:deque() for key in ('laptopovi','telefoni','tableti','other')}
+    for product in rows:
+        key=product['category_slug']
+        buckets[key if key in buckets else 'other'].append(product)
+    result=[]
+    while any(buckets.values()):
+        for bucket in buckets.values():
+            if bucket:result.append(bucket.popleft())
+    return result
+
+
 def products(admin=False, category=None, query=''):
     sql = 'SELECT p.*, c.name category_name,c.slug category_slug,c.icon FROM products p JOIN categories c ON c.id=p.category_id WHERE 1=1'
     if admin:
-        sql = sql.replace('SELECT p.*,','SELECT p.*, (SELECT count(*) FROM item_views v WHERE v.product_id=p.id) unique_views, (SELECT status FROM product_ai a WHERE a.product_id=p.id) ai_status,',1)
+        sql = sql.replace('SELECT p.*,','SELECT p.*, (SELECT count(*) FROM item_views v WHERE v.product_id=p.id) unique_views, (SELECT status FROM product_ai a WHERE a.product_id=p.id) ai_status, (SELECT retry_at FROM product_ai a WHERE a.product_id=p.id) ai_retry_at,',1)
     args = []
     if not admin:
         sql += ' AND p.active=1'
@@ -246,7 +265,7 @@ def products(admin=False, category=None, query=''):
     if query:
         tokens = fold(query).split()
         rows = [p for p in rows if all(token in fold(p['title']+' '+p['brand']+' '+p['description']+' '+' '.join(p['specs'].values())) for token in tokens)]
-    return rows
+    return showcase(rows) if not admin and not category else rows
 
 
 def product(identity, admin=False):

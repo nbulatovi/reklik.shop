@@ -498,7 +498,7 @@ def save_product():
                 images.append(filename)
             except (UnidentifiedImageError, OSError):
                 raise ValueError('Fotografija nije ispravna. Koristite JPG, PNG ili WebP.')
-        specs = inventory_rules.parse_specs(f.get('specs',''))
+        specs = inventory_rules.merge_missing(inventory_rules.parse_specs(f.get('specs','')),inventory_rules.description_specs(desc))
         weight = float(f.get('weight_kg') or 0)
         if not 0 <= weight <= 100:
             raise ValueError('Težina mora biti između 0 i 100 kg.')
@@ -532,7 +532,7 @@ def save_product():
         store.audit('product_saved', pid)
         import specifications
         identity_changed=not existing or existing['title']!=title or existing['brand']!=f.get('brand','').strip()[:80]
-        enrich=identity_changed or (existing and specs!=existing['specs']) or f.get('lookup_requested')=='1'
+        enrich=identity_changed or not specs or (existing and (specs!=existing['specs'] or desc!=existing['description'])) or f.get('lookup_requested')=='1'
         if enrich:
             fields=['specs']+([] if desc else ['description'])
             if f.get('auto_category_id')=='1' and not existing:fields.append('category_id')
@@ -541,6 +541,17 @@ def save_product():
         return back_admin(message='Uređaj je sačuvan. AI u pozadini dodaje samo nedostajuće podatke; vaš unos ostaje sačuvan.' if enrich else 'Uređaj je sačuvan. Javne stranice se automatski objavljuju.')
     except (ValueError, KeyError, store.sqlite3.IntegrityError, ArithmeticError) as e:
         return back_admin(error=str(e))
+
+
+@app.route('/admin/inventory/enrich',methods=['POST'])
+@admin_only
+def enrich_visible_inventory():
+    import specifications
+    products=[p for p in store.products(admin=True) if p['active']]
+    for product in products:specifications.queue_product(product['id'],['specs','description'])
+    store.audit('inventory_enrichment_requested',detail=str(len(products)))
+    queue_publish()
+    return back_admin(message='Dopuna nedostajućih specifikacija je pokrenuta za '+str(len(products))+' uređaja. Ručno uneti podaci imaju prednost.')
 
 
 @app.route('/admin/product/<int:pid>/visibility',methods=['POST'])

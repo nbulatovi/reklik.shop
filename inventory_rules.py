@@ -46,8 +46,9 @@ LABELS={
 
 
 def label(key):
-    key=str(key).strip()
-    return LABELS.get(fold(key),key[:1].upper()+key[1:])
+    key=re.sub(r'^[\s•●▪*–—-]+','',str(key)).strip()
+    aliases={'procesor (cpu)':'Procesor','grafika (gpu)':'Grafika','radna memorija (ram)':'RAM','interna memorija (ssd)':'SSD','interna memorija':'Skladište'}
+    return aliases.get(fold(key),LABELS.get(fold(key),key[:1].upper()+key[1:]))
 
 
 def family(key):
@@ -104,3 +105,26 @@ def terminology(text):
         original=match.group();new=forms[original.lower()]
         return new.upper() if original.isupper() else new.capitalize() if original[0].isupper() else new
     return re.sub(r'\b(?:'+ '|'.join(forms)+r')\b',replace,str(text),flags=re.I)
+
+
+def description_specs(description):
+    """Extract explicit owner facts only; never infer a device configuration."""
+    found={}
+    for line in str(description).splitlines():
+        if ':' not in line:continue
+        key,value=line.split(':',1);key=label(key)
+        if key in ('Procesor','RAM','SSD','HDD','Skladište','Ekran','Operativni sistem') and value.strip():found[key]=value.strip()
+    text=fold(description)
+    ram=re.search(r'(\d+(?:[.,]\d+)?)\s*gb\s*(?:ram(?:\s+memorije?)?|radne\s+memorije)',text)
+    if not ram:ram=re.search(r'(?:ram|radna memorija)\s*(?:je|kapaciteta|od|:)?\s*(\d+(?:[.,]\d+)?)\s*gb',text)
+    if ram:found.setdefault('RAM',ram[1].replace('.',',')+' GB')
+    storage=re.search(r'(\d+(?:[.,]\d+)?)\s*(gb|tb)\s*(?:skladisnog prostora|skladisni prostor)',text)
+    if not storage:storage=re.search(r'(?:skladisni prostor|(?:m[.]?2\s+)?disk)\s*(?:je\s*)?(?:kapaciteta\s*)?(\d+(?:[.,]\d+)?)\s*(gb|tb)',text)
+    if storage:found.setdefault('Skladište',storage[1].replace('.',',')+' '+storage[2].upper())
+    system=re.search(r'\b(android\s+\d+(?:\.\d+)*|windows\s+(?:10|11)(?:\s+pro)?)\b',text)
+    if system:found.setdefault('Operativni sistem',system[1].title().replace(' Pro',' Pro'))
+    screen=re.search(r'(\d+(?:[.,]\d+)?)\s*[- ]?(?:inca|incni)',text)
+    if screen:found.setdefault('Ekran',screen[1].replace('.',',')+' inča'+(', Full HD' if 'full hd' in text else ''))
+    cpu=re.search(r'\bi([3579])[-\s]*(\d{1,2})[.\s-]*(?:gen|generacij)',text)
+    if cpu:found.setdefault('Procesor','Intel Core i'+cpu[1]+', '+cpu[2]+'. generacija')
+    return normalize_specs(found)

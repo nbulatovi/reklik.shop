@@ -72,11 +72,20 @@
     const panel = $('[data-filter-panel]'), desktop = window.matchMedia('(min-width: 901px)');
     const layoutFilters = () => { if (panel) panel.open = desktop.matches; };
     layoutFilters(); desktop.addEventListener('change',layoutFilters);
+    const reorder=()=>{
+      const mode=$('[data-sort]')?.value||'featured';let ordered=cards.filter(c=>!c.hidden);
+      if(mode==='featured'){
+        const groups=['laptopovi','telefoni','tableti','other'].map(group=>ordered.filter(c=>c.dataset.categoryGroup===group));
+        ordered=[];while(groups.some(group=>group.length))groups.forEach(group=>{if(group.length)ordered.push(group.shift());});
+      }else ordered.sort((a,b)=>mode==='low'?Number(a.dataset.price)-Number(b.dataset.price):mode==='high'?Number(b.dataset.price)-Number(a.dataset.price):mode==='recent'?Number(b.dataset.updated)-Number(a.dataset.updated)||Number(b.dataset.id)-Number(a.dataset.id):a.dataset.search.localeCompare(b.dataset.search));
+      [...ordered,...cards.filter(c=>c.hidden)].forEach(c=>grid.append(c));
+    };
     const filter = () => {
       const query = fold(search?.value || '').trim();
       const tokens = query.split(/\s+/).filter(Boolean);
       const floor = min?.value ? Number(min.value) : 0, ceiling = max?.value ? Number(max.value) : Infinity;
       cards.forEach(c => { const price = Number(c.dataset.price); c.hidden = !tokens.every(t => fold(c.dataset.search).includes(t)) || (brand?.value && c.dataset.brand !== brand.value) || price < floor || price > ceiling; });
+      reorder();
       const n = cards.filter(c => !c.hidden).length;
       if ($('[data-results-count]')) $('[data-results-count]').textContent = n;
       if ($('[data-empty]')) $('[data-empty]').hidden = n > 0;
@@ -90,10 +99,7 @@
     }
     [brand,min,max].filter(Boolean).forEach(input=>input.addEventListener(input.tagName === 'SELECT' ? 'change' : 'input',filter));
     $$('[data-reset-filters]').forEach(button=>button.addEventListener('click',()=>{if(search)search.value='';if(brand)brand.value='';if(min)min.value='';if(max)max.value='';filter();}));
-    $('[data-sort]')?.addEventListener('change', e => {
-      const mode = e.target.value;
-      [...cards].sort((a,b) => mode === 'low' ? Number(a.dataset.price)-Number(b.dataset.price) : mode === 'high' ? Number(b.dataset.price)-Number(a.dataset.price) : mode === 'name' ? a.dataset.search.localeCompare(b.dataset.search) : cards.indexOf(a)-cards.indexOf(b)).forEach(c => grid.append(c));
-    });
+    $('[data-sort]')?.addEventListener('change',reorder);
     filter();
   }
 
@@ -297,17 +303,17 @@
     });
     window.addEventListener('pageshow',event=>{if(event.persisted){delete inventory.dataset.submitting;save.disabled=false;save.removeAttribute('aria-busy');save.textContent='Sačuvaj uređaj';}});
   }
-  if($('[data-product-ai][data-state="pending"]')){
+  if($('[data-product-ai][data-state="pending"],[data-product-ai][data-state="retrying"]')){
     const refresh=async()=>{
       try{
         const response=await fetch('/admin/inventory-status',{cache:'no-store'});if(!response.ok)return;
         for(const task of await response.json()){
           const label=$('[data-product-ai="'+task.product_id+'"]');if(!label)continue;
-          label.dataset.state=task.status;
-          label.textContent=task.status==='pending'?'AI obrađuje podatke u pozadini…':task.status==='completed'?'AI podaci su spremni.':task.status==='failed'?'AI nije dovršen. Otvorite Uredi → Sačuvaj i dopuni nedostajuće specifikacije.':'';
+          label.dataset.state=task.status==='failed'&&task.retry_at?'retrying':task.status;
+          label.textContent=task.status==='pending'?'AI obrađuje podatke u pozadini…':task.status==='completed'?'AI podaci su spremni.':task.status==='failed'?(task.retry_at?'AI će automatski pokušati ponovo.':(task.message||'AI nije dovršen. Otvorite Uredi i ponovite dopunu.')):'';
         }
       }catch{}
-      if($('[data-product-ai][data-state="pending"]'))setTimeout(refresh,2500);
+      if($('[data-product-ai][data-state="pending"],[data-product-ai][data-state="retrying"]'))setTimeout(refresh,2500);
     };setTimeout(refresh,2000);
   }
   if (aiForm) aiForm.addEventListener('submit', async e => {

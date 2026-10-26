@@ -14,9 +14,11 @@ import store
 def maintenance():
     import payments
     import publisher
+    import specifications
     last_backup = 0
     while True:
         try:
+            specifications.retry_failed()
             if store.release_expired():
                 publisher.schedule()
             with store.connect() as c:

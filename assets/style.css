@@ -201,3 +201,15 @@ body p{font-size:16px!important;line-height:1.7}body small{font-size:14px!import
  .device-gallery .device-main-image{grid-column:1;grid-row:1/span 4}
  .device-gallery .device-condition{grid-column:1/-1;grid-row:5;margin-top:0}
 }
+
+.trust-grid{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+.inventory-row .row-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:10px}
+.inventory-row .row-actions form{display:block;margin:0;min-width:0}
+.inventory-row .row-actions .inventory-action{display:flex;align-items:center;justify-content:center;width:100%;min-height:44px;padding:8px 10px;border:1px solid #d2c6b9;border-radius:6px;background:#fff8f0;color:#9b4100;font-family:inherit;font-size:16px;font-weight:600;line-height:1.35;text-align:center;text-decoration:none;white-space:normal;overflow-wrap:anywhere;box-sizing:border-box}
+.inventory-row .row-actions .inventory-action:hover{background:#ffe7cc;border-color:#e76500}
+.inventory-row .row-actions .inventory-delete{color:#a32720}
+.inventory-row .row-actions>a:last-child:not(:first-child){grid-column:1/-1}
+.admin-layout>.panel,.admin-layout form{min-width:0}
+.admin-layout input[type=file]{min-width:0;max-width:100%}
+
+.inventory-bulk{margin:0 0 16px}.inventory-bulk .button{width:100%;font-size:16px!important;white-space:normal;line-height:1.4;min-height:48px}

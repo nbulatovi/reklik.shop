@@ -417,7 +417,7 @@ class StoreTests(unittest.TestCase):
 
     def test_specs_cache_prevents_repeated_cli_jobs(self):
         import specifications,hashlib
-        key=hashlib.sha256(('missing-v2|'+store.fold('Dell')+'|'+store.fold('Latitude 5420')+'|{}').encode()).hexdigest()
+        key=specifications.cache_key('Latitude 5420','Dell',{})
         with store.connect(True) as c:c.execute('INSERT INTO model_specs VALUES(?,?,?,NULL)',(key,json.dumps({'specs':{'Ekran':'14 inča'}}),store.now()))
         with patch.object(specifications.WORKERS,'submit') as submit:
             result=specifications.start('Latitude 5420','Dell')
@@ -589,6 +589,79 @@ class StoreTests(unittest.TestCase):
         self.assertEqual(page.count('type="radio" name="condition"'),6)
         with store.connect(True) as c:c.execute("UPDATE products SET condition='Novo' WHERE id=1")
         self.assertIn('https://schema.org/NewCondition',self.client.get('/proizvod/test-thinkpad/').get_data(as_text=True))
+
+    def test_auth_refreshes_expired_copy_and_keeps_newer_login(self):
+        from ai_editor import sync_auth
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);source=root/'login.json';destination=root/'isolated';destination.mkdir()
+            old={'last_refresh':'2026-10-13T18:57:32Z','tokens':{'access_token':'fake-old'}}
+            fresh={'last_refresh':'2026-10-23T18:53:12Z','tokens':{'access_token':'fake-fresh'}}
+            source.write_text(json.dumps(fresh));(destination/'auth.json').write_text(json.dumps(old))
+            sync_auth(destination,source)
+            self.assertEqual(json.loads((destination/'auth.json').read_text()),fresh)
+            self.assertEqual((destination/'auth.json').stat().st_mode&0o777,0o600)
+            source.write_text(json.dumps(old));sync_auth(destination,source)
+            self.assertEqual(json.loads((destination/'auth.json').read_text()),fresh)
+
+    def test_owner_description_supplies_missing_facts_without_replacing_manual_specs(self):
+        description='CPU: I5 8Gen\nRAM: 8GB\nSSD: 256GB\nLicencirani windows 11 pro\nEkran 14 inca Full HD'
+        specs=inventory_rules.description_specs(description)
+        self.assertEqual(specs['Procesor'],'I5 8Gen');self.assertEqual(specs['RAM'],'8GB')
+        self.assertEqual(specs['SSD'],'256GB');self.assertEqual(specs['Ekran'],'14 inča, Full HD')
+        self.assertEqual(specs['Operativni sistem'],'Windows 11 Pro')
+        phone=inventory_rules.description_specs('Telefon ima 128GB skladišnog prostora i 6GB radne memorije, Android 15.')
+        self.assertEqual(phone,{'RAM':'6 GB','Skladište':'128 GB','Operativni sistem':'Android 15'})
+        with store.connect(True) as c:c.execute('UPDATE products SET description=? WHERE id=1',(description,))
+        specifications.queue_product(1,['specs'])
+        product=store.product(1)
+        self.assertEqual(product['specs']['RAM'],'16 GB')
+        self.assertEqual(product['specs']['Procesor'],'Core i5')
+        self.assertEqual(product['specs']['SSD'],'256GB')
+        self.assertEqual(product['description'],description)
+        bullet=inventory_rules.merge_missing({'• Procesor (CPU)':'V1202B','• Radna memorija (RAM)':'8 GB','• Interna memorija (SSD)':'128 GB'}, {'CPU':'Another','RAM':'16 GB','Skladište':'256 GB','Ekran':'Test'})
+        self.assertEqual(bullet,{'Procesor':'V1202B','RAM':'8 GB','SSD':'128 GB','Ekran':'Test'})
+
+    def test_description_context_has_separate_research_cache(self):
+        a=specifications.start('Redmi 13C','Xiaomi',{},'128GB skladišnog prostora')
+        b=specifications.start('Redmi 13C','Xiaomi',{},'256GB skladišnog prostora')
+        self.assertNotEqual(a['id'],b['id'])
+
+    def test_failed_inventory_research_retries_automatically_with_current_manual_data(self):
+        specifications.queue_product(1,['specs'])
+        with store.connect() as c:job=c.execute('SELECT job_id FROM product_ai WHERE product_id=1').fetchone()[0]
+        specifications.update(job,'failed',{'message':'Temporary outage'})
+        with store.connect(True) as c:
+            task=c.execute('SELECT * FROM product_ai WHERE product_id=1').fetchone()
+            self.assertEqual(task['attempts'],1);self.assertGreater(task['retry_at'],store.now())
+            c.execute('UPDATE products SET specs=? WHERE id=1',(json.dumps({'RAM':'32 GB'}),))
+        with patch.object(store,'now',return_value=task['retry_at']+1):specifications.retry_failed()
+        with store.connect() as c:new=dict(c.execute('SELECT * FROM product_ai WHERE product_id=1').fetchone())
+        self.assertEqual(new['attempts'],2);self.assertNotEqual(job,new['job_id'])
+        self.assertEqual(json.loads(new['baseline'])['specs']['RAM'],'32 GB')
+        specifications.update(new['job_id'],'completed',self.ai_result())
+        self.assertEqual(store.product(1)['specs']['RAM'],'32 GB')
+        with store.connect(True) as c:
+            c.execute("UPDATE product_ai SET status='pending',attempts=3 WHERE product_id=1")
+        specifications.update(new['job_id'],'failed',{'message':'Still unavailable'})
+        with store.connect() as c:self.assertEqual(c.execute('SELECT retry_at FROM product_ai').fetchone()[0],0)
+        with patch.object(specifications,'queue_product') as queue:specifications.retry_failed();queue.assert_not_called()
+
+    def test_admin_bulk_specs_retry_is_private_and_keeps_hidden_inventory(self):
+        self.assertEqual(self.client.post('/admin/inventory/enrich').status_code,403)
+        html=self.login();csrf=self.hidden(html,'csrf')
+        with store.connect(True) as c:
+            c.execute("INSERT INTO products(category_id,title,slug,price_cents,quantity,active,created_at,updated_at) VALUES(4,'Hidden device','hidden-specs-test',10000,1,0,?,?)",(store.now(),store.now()))
+        with patch.object(specifications,'queue_product') as queue:
+            result=self.client.post('/admin/inventory/enrich',data={'csrf':csrf})
+        self.assertEqual(result.status_code,302)
+        queue.assert_called_once_with(1,['specs','description'])
+        self.assertEqual(store.product(1)['specs'],{'Procesor':'Core i5','Memorija':'16 GB'})
+
+    def test_catalog_showcase_round_robin_skips_empty_groups(self):
+        rows=[{'id':i,'category_slug':group} for i,group in enumerate(['telefoni','telefoni','laptopovi','other-one','tableti','laptopovi','other-two','telefoni'])]
+        self.assertEqual([r['id'] for r in store.showcase(rows)],[2,0,4,3,5,1,6,7])
+        no_tablets=[r for r in rows if r['category_slug']!='tableti']
+        self.assertEqual([r['id'] for r in store.showcase(no_tablets)],[2,0,3,5,1,6,7])
 
     def test_domain_does_not_cut_over_while_dns_points_to_parking(self):
         import domain,publisher

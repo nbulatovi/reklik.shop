@@ -26,15 +26,29 @@ def writable(relative):
     return relative.as_posix() in ALLOWED_ROOT or (relative.parts[0] in ('templates','assets') and relative.suffix in ('.html','.txt','.css','.js','.svg','.json'))
 
 
+def sync_auth(directory,source=None):
+    """Refresh the isolated CLI login without replacing a newer refreshed token."""
+    source=Path(source or Path.home()/'.codex/auth.json');directory=Path(directory)
+    directory.mkdir(parents=True,exist_ok=True,mode=0o700);target=directory/'auth.json'
+    def stamp(path):
+        data=json.loads(path.read_text())
+        from datetime import datetime
+        try:return datetime.fromisoformat(data.get('last_refresh','').replace('Z','+00:00')).timestamp()
+        except ValueError:return path.stat().st_mtime
+    if source.exists() and (not target.exists() or stamp(source)>stamp(target)):
+        temporary=directory/('auth-'+store.secrets.token_hex(6)+'.tmp')
+        shutil.copy2(source,temporary);temporary.chmod(0o600);temporary.replace(target)
+    if not target.exists():raise ValueError('Nema prijave za AI. Prijavite Codex na ovom računaru.')
+    target.chmod(0o600)
+
+
 def run(job,prompt):
     working = store.STATE / 'ai' / job
     auth = store.STATE / 'ai-auth'
     rollback = store.STATE / 'ai-rollback' / job
     try:
         auth.mkdir(parents=True,exist_ok=True,mode=0o700)
-        if not (auth/'auth.json').exists():
-            shutil.copy2(Path.home()/'.codex/auth.json',auth/'auth.json')
-            (auth/'auth.json').chmod(0o600)
+        sync_auth(auth)
         (auth/'guard-log.jsonl').write_text('')
         (auth/'config.toml').write_text('''sandbox_mode = "workspace-write"
 model_reasoning_effort = "medium"
