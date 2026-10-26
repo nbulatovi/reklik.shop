@@ -22,6 +22,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import check_password_hash, generate_password_hash
 import store
 import payments
+import inventory_rules
 
 app = Flask(__name__, static_folder='assets', static_url_path='/assets')
 app.json.sort_keys = False
@@ -48,6 +49,7 @@ country_codes = {code for code, name in countries}
 
 app.jinja_env.filters['truncate_specs'] = lambda values: ' · '.join(str(v) for v in values[:3])
 app.jinja_env.filters['image_urls'] = lambda values, origin: [origin + '/media/' + x for x in values]
+app.jinja_env.filters['full_image_urls'] = lambda values, origin: [origin+'/media/full/'+x.replace('.webp','.jpg') if (store.ORIGINALS/x.replace('.webp','.jpg')).is_file() else origin+'/media/'+x for x in values]
 app.jinja_env.filters['asset_urls'] = lambda values, origin: [origin + '/assets/' + x for x in values]
 app.jinja_env.filters['converted_price'] = lambda cents, cfg: f'{cents / 100:.2f}'
 app.jinja_env.filters['order_money'] = store.display_money
@@ -111,7 +113,7 @@ def template_context():
     cfg = store.settings()
     return {'cfg': cfg, 'categories': store.categories(), 'base': '', 'live': True,
             'asset_version': str(max((store.ROOT/'assets/style.css').stat().st_mtime_ns,(store.ROOT/'assets/site.js').stat().st_mtime_ns)),
-            'csrf': g.session['csrf'] if getattr(g, 'session', None) else '',
+            'csrf': g.session['csrf'] if getattr(g, 'session', None) else '', 'condition_grades':inventory_rules.GRADES,
             'money': lambda cents: store.display_money(cents,'EUR'),
             'minor_money': lambda cents: store.display_money(cents,'RSD'),
             'pricing_explanation': pricing_explanation,
@@ -136,13 +138,13 @@ def health():
 
 @app.route('/')
 def home():
-    return render_template('home.html', products=store.products(), category=None, query='', page_title='Sertifikovano obnovljeni laptopovi, telefoni i tableti')
+    return render_template('home.html', products=store.products(), category=None, query='', page_title='Sertifikovano refabrikovani laptopovi, telefoni i tableti')
 
 
 @app.route('/katalog/')
 def catalog():
     query = request.args.get('q', '')[:100]
-    return render_template('catalog.html', products=store.products(query=query), category=None, query=query, page_title='Katalog obnovljenih uređaja')
+    return render_template('catalog.html', products=store.products(query=query), category=None, query=query, page_title='Katalog refabrikovanih uređaja')
 
 
 @app.route('/catalog.json')
@@ -161,7 +163,7 @@ def category(slug):
     cat = next((c for c in store.categories() if c['slug'] == slug), None)
     if not cat:
         abort(404)
-    return render_template('catalog.html', products=store.products(category=slug), category=cat, query='', page_title=cat['name'] + ' — sertifikovano obnovljeno')
+    return render_template('catalog.html', products=store.products(category=slug), category=cat, query='', page_title=cat['name'] + ' — sertifikovano refabrikovano')
 
 
 @app.route('/proizvod/<slug>/')
@@ -208,6 +210,12 @@ def media(name):
     if not re.fullmatch(r'[a-f0-9]{24}\.webp', name):
         abort(404)
     return send_from_directory(store.UPLOADS, name, max_age=86400)
+
+
+@app.route('/media/full/<name>')
+def full_media(name):
+    if not re.fullmatch(r'[a-f0-9]{24}\.jpg',name):abort(404)
+    return send_from_directory(store.ORIGINALS,name,max_age=86400)
 
 
 def decode_cart():
@@ -444,7 +452,7 @@ def admin_dashboard():
     if request.args.get('copy'):
         selected = store.product(request.args['copy'], admin=True)
         if selected:
-            selected = dict(selected, id='', slug='', quantity=1, images=[])
+            selected = dict(selected, id='', slug='', quantity=1, active=1)
     with store.connect() as c:
         orders = [store.unpack(r) for r in c.execute("SELECT o.*, (SELECT status FROM order_notifications n WHERE n.order_id=o.id AND n.event='new_order') email_status, (SELECT recipient FROM order_notifications n WHERE n.order_id=o.id AND n.event='new_order') email_recipient FROM orders o ORDER BY o.created_at DESC LIMIT 100")]
         jobs = [dict(r) for r in c.execute("SELECT * FROM jobs WHERE kind!='specifications' ORDER BY created_at DESC LIMIT 5")]
@@ -462,7 +470,7 @@ def back_admin(tab='inventory', message='', error=''):
 def save_product():
     try:
         f = request.form
-        title, desc = f.get('title', '').strip()[:160], f.get('description', '').strip()[:12000]
+        title, desc = f.get('title', '').strip()[:160], inventory_rules.terminology(f.get('description', '').strip()[:12000])
         if len(title) < 3:
             raise ValueError('Unesite naziv uređaja.')
         category_id, quantity = int(f['category_id']), int(f.get('quantity', 1))
@@ -483,18 +491,14 @@ def save_product():
                 if im.width * im.height > 50000000:
                     raise ValueError('Fotografija je prevelika.')
                 im = ImageOps.exif_transpose(im).convert('RGB')
-                im.thumbnail((1600, 1600))
                 filename = secrets.token_hex(12) + '.webp'
+                im.save(store.ORIGINALS / filename.replace('.webp','.jpg'),'JPEG',quality=95)
+                im.thumbnail((1600, 1600))
                 im.save(store.UPLOADS / filename, 'WEBP', quality=87, method=4)
                 images.append(filename)
             except (UnidentifiedImageError, OSError):
                 raise ValueError('Fotografija nije ispravna. Koristite JPG, PNG ili WebP.')
-        specs = {}
-        for line in f.get('specs', '').splitlines()[:30]:
-            if ':' in line:
-                key, value = line.split(':', 1)
-                if key.strip() and value.strip():
-                    specs[key.strip()[:60]] = value.strip()[:300]
+        specs = inventory_rules.parse_specs(f.get('specs',''))
         weight = float(f.get('weight_kg') or 0)
         if not 0 <= weight <= 100:
             raise ValueError('Težina mora biti između 0 i 100 kg.')
@@ -508,7 +512,7 @@ def save_product():
             if not c.execute('SELECT 1 FROM categories WHERE id=?', (category_id,)).fetchone():
                 raise ValueError('Izaberite kategoriju.')
             values = (category_id, title, f.get('brand', '').strip()[:80], cents, quantity,
-                      f.get('condition', 'Refurbished — odlično').strip()[:120], desc,
+                      inventory_rules.grade(f.get('condition',inventory_rules.GRADES[1]),desc), desc,
                       json.dumps(specs, ensure_ascii=False), json.dumps(images), weight, active, store.now())
             if pid:
                 current = c.execute('SELECT revision FROM products WHERE id=?', (pid,)).fetchone()
@@ -518,27 +522,75 @@ def save_product():
                     raise ValueError('Inventar se promenio dok ste uređivali uređaj (moguća nova porudžbina). Otvorite uređaj ponovo i proverite količinu.')
                 c.execute('''UPDATE products SET category_id=?,title=?,brand=?,price_cents=?,quantity=?,condition=?,
                   description=?,specs=?,images=?,weight_kg=?,active=?,updated_at=?,revision=revision+1 WHERE id=?''', values + (pid,))
-                task=c.execute("SELECT fields FROM product_ai WHERE product_id=? AND status='pending'",(pid,)).fetchone()
-                if task:
-                    fields=[name for name in json.loads(task['fields']) if f.get('auto_'+name)!='0']
-                    c.execute('UPDATE product_ai SET fields=? WHERE product_id=?',(json.dumps(fields),pid))
             else:
                 slug = store.slugify(title) + '-' + secrets.token_hex(2)
-                c.execute('''INSERT INTO products(category_id,title,brand,price_cents,quantity,condition,description,
-                  specs,images,weight_kg,active,updated_at,created_at,slug) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
-                  values + (store.now(), slug))
-                pid = c.execute('SELECT last_insert_rowid()').fetchone()[0]
+                pid=store.next_product_id(c)
+                c.execute('''INSERT INTO products(id,category_id,title,brand,price_cents,quantity,condition,description,
+                  specs,images,weight_kg,active,updated_at,created_at,slug) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
+                  (pid,) + values + (store.now(), slug))
             c.execute('UPDATE products SET base_price_cents=? WHERE id=?',(base_cents,pid))
         store.audit('product_saved', pid)
         import specifications
         identity_changed=not existing or existing['title']!=title or existing['brand']!=f.get('brand','').strip()[:80]
-        if identity_changed or f.get('lookup_requested')=='1':
-            fields=[name for name in ('specs','description','category_id') if f.get('auto_'+name,'1' if name=='category_id' or not (specs if name=='specs' else desc) else '0')=='1']
+        enrich=identity_changed or (existing and specs!=existing['specs']) or f.get('lookup_requested')=='1'
+        if enrich:
+            fields=['specs']+([] if desc else ['description'])
+            if f.get('auto_category_id')=='1' and not existing:fields.append('category_id')
             specifications.queue_product(pid,fields)
         queue_publish()
-        return back_admin(message='Uređaj je sačuvan. Možete odmah uneti sledeći; AI dopunjava podatke u pozadini.' if identity_changed or f.get('lookup_requested')=='1' else 'Uređaj je sačuvan. Javne stranice se automatski objavljuju.')
+        return back_admin(message='Uređaj je sačuvan. AI u pozadini dodaje samo nedostajuće podatke; vaš unos ostaje sačuvan.' if enrich else 'Uređaj je sačuvan. Javne stranice se automatski objavljuju.')
     except (ValueError, KeyError, store.sqlite3.IntegrityError, ArithmeticError) as e:
         return back_admin(error=str(e))
+
+
+@app.route('/admin/product/<int:pid>/visibility',methods=['POST'])
+@admin_only
+def product_visibility(pid):
+    product=store.product(pid,admin=True)
+    if not product:abort(404)
+    visible=request.form.get('visible')=='1'
+    if visible and not product['images'] and not product['catalog_image']:
+        return back_admin(error='Dodajte fotografiju pre prikazivanja uređaja.')
+    with store.connect(True) as c:
+        c.execute('UPDATE products SET active=?,revision=revision+1,updated_at=? WHERE id=?',(int(visible),store.now(),pid))
+    store.audit('product_shown' if visible else 'product_hidden',pid)
+    queue_publish()
+    return back_admin(message='Uređaj je prikazan.' if visible else 'Uređaj je sakriven iz prodavnice.')
+
+
+@app.route('/admin/product/<int:pid>/duplicate',methods=['POST'])
+@admin_only
+def duplicate_product(pid):
+    with store.connect(True) as c:
+        row=c.execute('SELECT * FROM products WHERE id=?',(pid,)).fetchone()
+        if not row:abort(404)
+        data=dict(row);new_id=store.next_product_id(c)
+        data.update(id=new_id,slug=store.slugify(data['title'])+'-'+secrets.token_hex(3),quantity=1,
+                    active=int(bool(json.loads(data['images']) or data['catalog_image'])),revision=1,created_at=store.now(),updated_at=store.now())
+        c.execute('INSERT INTO products('+','.join(data)+') VALUES('+','.join('?' for _ in data)+')',tuple(data.values()))
+    store.audit('product_duplicated',new_id,'source='+str(pid))
+    queue_publish()
+    return redirect(url_for('admin_dashboard',edit=new_id,message='Uređaj je dupliran sa količinom 1. Proverite podatke i fotografije.'))
+
+
+@app.route('/admin/product/<int:pid>/delete',methods=['POST'])
+@admin_only
+def delete_product(pid):
+    with store.connect(True) as c:
+        row=c.execute('SELECT * FROM products WHERE id=?',(pid,)).fetchone()
+        if not row:abort(404)
+        if str(row['revision'])!=request.form.get('revision'):
+            return back_admin(error='Uređaj se promenio. Osvežite inventar pre brisanja.')
+        images=json.loads(row['images'])
+        c.execute('DELETE FROM products WHERE id=?',(pid,))
+        referenced={name for record in c.execute('SELECT images FROM products') for name in json.loads(record['images'])}
+    for name in images:
+        if name not in referenced:
+            (store.UPLOADS/name).unlink(missing_ok=True)
+            (store.ORIGINALS/name.replace('.webp','.jpg')).unlink(missing_ok=True)
+    store.audit('product_deleted',pid)
+    queue_publish()
+    return back_admin(message='Uređaj je trajno obrisan iz inventara. Sačuvane porudžbine ostaju dostupne.')
 
 
 @app.route('/admin/category', methods=['POST'])
@@ -561,7 +613,7 @@ def save_category():
                 if not 0 <= fee_override <= 100000:
                     raise ValueError('Proverite kategoričnu poštarinu.')
                 overrides[courier['id']] = fee_override
-        values = (name, f.get('description', '').strip()[:1000], f.get('icon', 'laptop'), fee, weight, multiplier)
+        values = (name, inventory_rules.terminology(f.get('description', '').strip()[:1000]), f.get('icon', 'laptop'), fee, weight, multiplier)
         with store.connect(True) as c:
             if cid:
                 c.execute('UPDATE categories SET name=?,description=?,icon=?,shipping_rsd=?,weight_kg=?,international_multiplier=? WHERE id=?', values + (cid,))
@@ -619,7 +671,7 @@ def save_settings():
           'payment_enabled': f.get('payment_enabled') == 'yes', 'indexing_enabled': f.get('indexing_enabled') == 'yes',
           'warranty_eur_cents': warranty, 'couriers': couriers, 'international_rates_rsd': rates,
           'shipping_days': f.get('shipping_days', cfg['shipping_days'])[:100], 'international_days': f.get('international_days', cfg['international_days'])[:150],
-          'site_url': site_url, 'hero_title': f.get('hero_title', cfg['hero_title'])[:160], 'hero_text': f.get('hero_text', cfg['hero_text'])[:600]})
+          'site_url': site_url, 'hero_title': f.get('hero_title', cfg['hero_title'])[:160], 'hero_text': inventory_rules.terminology(f.get('hero_text', cfg['hero_text'])[:600])})
         store.audit('settings_changed')
         queue_publish()
         return back_admin('settings', message='Podešavanja su sačuvana.')

@@ -121,11 +121,11 @@ serve(app.app,host='127.0.0.1',port=4342)
             frame.locator('[name=title]').fill('Latitude 5420')
             frame.locator('[name=price]').fill('249')
             page.wait_for_function('() => document.querySelector(".store-frame")!==null')
-            frame.locator('[data-spec-status]').filter(has_text='su popunjeni').wait_for()
+            frame.locator('[name=specs]').fill('RAM: 16 GB\nSSD: 512 GB')
             assert frame.locator('[data-photo-preview] img').count()==2
-            assert 'Intel Core i5' in frame.locator('[name=specs]').input_value()
+            assert 'RAM: 16 GB' in frame.locator('[name=specs]').input_value()
             assert not errors,errors
             browser.close()
-            print(json.dumps({'result':'passed','flows':['public storefront iframe with intercepted QA backend','partitioned session cookie','mobile Cyrillic village COD','outer confirmation URL','top-level card redirect (mock, no charge)','framed admin login, repeated camera inputs and AI autofill'],'javascript_errors':errors}))
+            print(json.dumps({'result':'passed','flows':['public storefront iframe with intercepted QA backend','partitioned session cookie','mobile Cyrillic village COD','outer confirmation URL','top-level card redirect (mock, no charge)','framed admin login, repeated camera inputs and manual-first specifications'],'javascript_errors':errors}))
     finally:
         server.terminate();server.wait(timeout=15);log.close()

@@ -1,6 +1,6 @@
 # ReKlik.shop
 
-Serbian refurbished electronics storefront: complete crawlable HTML on GitHub Pages, with inventory, orders, payment verification and administration on the owner's PC.
+Serbian electronics storefront for refabrikovani uređaji: complete crawlable HTML on GitHub Pages, with inventory, orders, payment verification and administration on the owner's PC.
 
 ## Running services
 
@@ -34,7 +34,7 @@ Whop credentials are read at runtime from the existing `~/.secrets/electricians.
 
 Desktop browsing puts brand, large contact number, search, categories and filters in a side rail; products begin near the top edge. Mobile uses a compact two-column header and floating filter control. Product pages show a photo carousel, main specifications, price, Buy now and Add to cart together. Mobile purchase controls stay fixed at the bottom. Whole-number prices omit zero decimals while genuine fractional amounts remain exact.
 
-The current eight inventory entries are temporary fixtures requested by the owner for testing the full shopping flow. They are ordinary saleable stock, without special example labels or checkout restrictions. Card checkout is live and charges the shown amount if confirmed; replace/unpublish these fixtures before the intended commercial launch. Indexing remains off pending the domain cutover.
+The live catalog is managed by the owner. Products are ordinary saleable stock without special example labels or checkout restrictions. Card checkout is live and charges the shown amount only if confirmed. ReKlik.shop has active HTTPS and indexing.
 
 Browser QA uses temporary state and explicitly disables publishing. It must never export its temporary catalogue into the live repository.
 
@@ -42,9 +42,15 @@ Browser QA uses temporary state and explicitly disables publishing. It must neve
 
 Opening an individual item page makes a cookieless request to the PC backend. Admin shows distinct IP counts per item across all time. The database stores a product-specific keyed HMAC of the normalized address and first-seen time, never a raw IP for this counter. Cloudflare's connecting-IP header supplies the address; IPv4-mapped IPv6 forms normalize together. Repeat visits cannot increment the item twice. Known crawler user agents are excluded. A shared IP counts once; an IP change counts separately. Counts are private, excluded from public catalogue JSON, and removed with product deletion. Privacy text describes this first-party feature; no third-party analytics service is used.
 
-## Automatic inventory specifications
+## Inventory specifications and photographs
 
-The first fields are photos, brand, model and price. Brand/model changes trigger authenticated Codex CLI manufacturer research. Saving never waits for this lookup: the item and photographs are stored immediately, and a durable `product_ai` record binds the background job to that inventory item. The admin can start the next item or close the page; completion fills unchanged automatic specifications, description and category, then republishes. Manual edits, photos, price, quantity and activation are preserved. Pending inventory jobs resume after server or PC restart; failures remain visible beside the item and can be retried from Edit. The admin list refreshes job status without reloading a partially entered next item. Advanced inputs remain editable; explicit manual edits are preserved. Results include primary manufacturer links and are cached for 30 days. Model-family variants are identified rather than inventing a unit's RAM/storage/configuration. The research worker uses separate CLI state, Bubblewrap, a web-only trusted hook, schema-constrained output and no access to production inventory, orders or payment secrets. A live Dell Latitude 5420 research job passed and returned Dell support documents. No API key is copied to the browser.
+Admin enters known specifications manually. After saving, durable background Codex research adds **only missing** manufacturer-supported facts; no lookup runs while the owner is typing the model. The current manual values always win, including edits made while research is running. Equivalent labels (CPU/Procesor, RAM/Memorija and disk/storage/SSD) use consistent Serbian formatting. Research receives known specifications, does not infer an individual configuration from model-family variants, and caches separately for different manual configurations. Description fills only when blank. Manual descriptions, photos, prices, stock and visibility stay protected. Pending jobs resume after restart; “Sačuvaj i dopuni nedostajuće specifikacije” explicitly retries research. Primary-source links and research output stay in private state. The research worker uses isolated CLI state, Bubblewrap, a web-only hook and schema-constrained output, without payment credentials or customer information.
+
+New devices are visible by default and use “Refabrikovano - odlično stanje (Grade A)”. Six exact Serbian condition choices, including the owner's two distinct Grade B descriptions, are defined in inventory_rules.py. The one-time migration considers the old condition and description, preserves actual Novo entries and maps visible wear conservatively. Use “refabrikovani” in all future storefront copy; schema.org retains its required RefurbishedCondition enum and uses NewCondition for Novo.
+
+Rows offer Uredi, Dupliraj, Sakrij/Prikaži and Obriši trajno. Duplication copies specifications, photos and both prices, creates a permanent new ID/URL and sets quantity one. Hidden products leave the public catalog, categories, search and sitemap after export. Permanent deletion requires confirmation and a current revision, removes AI/view rows and deletes photo files only when no other product uses them. Historical order snapshots are retained. Deleted IDs are never reused, including IDs referenced by historical orders.
+
+Repeated camera and gallery selections accumulate up to 10 photos. New uploads retain full pixel resolution in metadata-free JPEG originals under private uploads/full; optimized WebP previews stay at most 1600px. A product-photo click opens a full-screen viewer with arrows, 100% zoom, scrolling and original-image link. Older uploads retain their previously stored resolution. Only active product originals and previews are exported. The CLI research and photo checks use isolated state and cannot modify the live catalog.
 
 ## Admin operation
 
@@ -72,7 +78,7 @@ The admin payment check creates a **real charge**, RSD 120.00. It is explicitly 
 
 ## International shipping
 
-There is one international switch, OFF by default. No per-country admin controls. Do not enable it until the Serbian exporter/invoice/customs arrangement, destination requirements, sanctions/export controls and the carrier's acceptance of refurbished electronics with installed batteries have been resolved. The switch is not a legal clearance or a guarantee that every destination is served. International COD is disabled. Estimates use DHL Express service-point references with a 25% fuel/packing buffer, weight adjustment and editable category multiplier. Destination duties/taxes are excluded and disclosed before purchase. Pošta air services must not be used automatically for battery devices.
+There is one international switch, OFF by default. No per-country admin controls. Do not enable it until the Serbian exporter/invoice/customs arrangement, destination requirements, sanctions/export controls and the carrier's acceptance of refabrikovani devices with installed batteries have been resolved. The switch is not a legal clearance or a guarantee that every destination is served. International COD is disabled. Estimates use DHL Express service-point references with a 25% fuel/packing buffer, weight adjustment and editable category multiplier. Destination duties/taxes are excluded and disclosed before purchase. Pošta air services must not be used automatically for battery devices.
 
 Research references, checked 20 October 2026:
 

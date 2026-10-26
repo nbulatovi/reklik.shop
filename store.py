@@ -7,6 +7,7 @@ import secrets
 import sqlite3
 import time
 import unicodedata
+import inventory_rules
 from contextlib import contextmanager
 from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
@@ -16,6 +17,8 @@ STATE = Path(os.environ.get('REKLIK_STATE', str(Path.home() / '.local/state/rekl
 STATE.mkdir(parents=True, exist_ok=True, mode=0o700)
 UPLOADS = STATE / 'uploads'
 UPLOADS.mkdir(exist_ok=True, mode=0o700)
+ORIGINALS=UPLOADS/'full'
+ORIGINALS.mkdir(exist_ok=True,mode=0o700)
 DB = STATE / 'store.sqlite3'
 
 DEFAULTS = {
@@ -41,7 +44,7 @@ DEFAULTS = {
     'canonical_url': 'https://reklik.shop', 'indexing_enabled': False,
     'payment_enabled': True, 'payment_test_enabled': True,
     'hero_title': 'Nova prilika.\nOdlična tehnologija.',
-    'hero_text': 'Sertifikovano obnovljeni laptopovi, telefoni i tableti. Pažljivo testirani, odlično očuvani i spremni za novi početak.',
+    'hero_text': 'Sertifikovano refabrikovani laptopovi, telefoni i tableti. Pažljivo testirani, odlično očuvani i spremni za novi početak.',
 }
 
 
@@ -83,7 +86,7 @@ def init_db():
           id INTEGER PRIMARY KEY, category_id INTEGER NOT NULL REFERENCES categories(id),
           title TEXT NOT NULL, slug TEXT UNIQUE NOT NULL, brand TEXT NOT NULL DEFAULT '',
           price_cents INTEGER NOT NULL CHECK(price_cents>0), quantity INTEGER NOT NULL CHECK(quantity>=0),
-          condition TEXT NOT NULL DEFAULT 'Refurbished — odlično', description TEXT NOT NULL DEFAULT '',
+          condition TEXT NOT NULL DEFAULT 'Refabrikovano - odlično stanje (Grade A)', description TEXT NOT NULL DEFAULT '',
           specs TEXT NOT NULL DEFAULT '{}', images TEXT NOT NULL DEFAULT '[]',
           weight_kg REAL NOT NULL DEFAULT 0, active INTEGER NOT NULL DEFAULT 0,
           created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
@@ -123,6 +126,8 @@ def init_db():
           error TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, sent_at INTEGER,
           UNIQUE(order_id,event));
         CREATE INDEX IF NOT EXISTS order_notifications_pending ON order_notifications(status,next_attempt,locked_until,id);
+        CREATE TABLE IF NOT EXISTS counters(name TEXT PRIMARY KEY,value INTEGER NOT NULL);
+        CREATE TABLE IF NOT EXISTS migrations(name TEXT PRIMARY KEY,applied_at INTEGER NOT NULL);
         ''')
         c.execute('BEGIN IMMEDIATE')
         product_columns = {row['name'] for row in c.execute('PRAGMA table_info(products)')}
@@ -133,6 +138,20 @@ def init_db():
             c.execute('UPDATE products SET base_price_cents=price_cents,price_cents=((price_cents*105+49999)/50000)*500,revision=revision+1')
         order_columns={row['name'] for row in c.execute('PRAGMA table_info(orders)')}
         if 'pricing' not in order_columns:c.execute("ALTER TABLE orders ADD COLUMN pricing TEXT NOT NULL DEFAULT '{}'")
+        largest=c.execute('SELECT COALESCE(max(id),0) FROM products').fetchone()[0]
+        for row in c.execute('SELECT items FROM orders'):
+            largest=max([largest]+[int(item.get('id',0)) for item in json.loads(row['items'])])
+        c.execute("INSERT INTO counters VALUES('products',?) ON CONFLICT(name) DO UPDATE SET value=max(value,excluded.value)",(largest+1,))
+        if not c.execute("SELECT 1 FROM migrations WHERE name='refabrikovani-grades-v1'").fetchone():
+            for row in c.execute('SELECT id,condition,description FROM products').fetchall():
+                condition=inventory_rules.grade(row['condition'],row['description'])
+                description=inventory_rules.terminology(row['description'])
+                c.execute('UPDATE products SET condition=?,description=?,revision=revision+1 WHERE id=?',(condition,description,row['id']))
+            for row in c.execute('SELECT id,description FROM categories').fetchall():
+                c.execute('UPDATE categories SET description=? WHERE id=?',(inventory_rules.terminology(row['description']),row['id']))
+            for row in c.execute('SELECT key,value FROM settings WHERE key IN (\'hero_title\',\'hero_text\')').fetchall():
+                c.execute('UPDATE settings SET value=? WHERE key=?',(json.dumps(inventory_rules.terminology(json.loads(row['value'])),ensure_ascii=False),row['key']))
+            c.execute("INSERT INTO migrations VALUES('refabrikovani-grades-v1',?)",(now(),))
         category_columns = {row['name'] for row in c.execute('PRAGMA table_info(categories)')}
         if 'shipping_overrides' not in category_columns:
             c.execute("ALTER TABLE categories ADD COLUMN shipping_overrides TEXT NOT NULL DEFAULT '{}'")
@@ -250,6 +269,14 @@ def money_minor(eur_cents, cfg=None):
 def list_price(base_cents):
     """5% on base, then ceiling to EUR 5 without intermediate cent rounding."""
     return ((int(base_cents)*105+49999)//50000)*500
+
+
+def next_product_id(c):
+    largest=c.execute('SELECT COALESCE(max(id),0)+1 FROM products').fetchone()[0]
+    current=c.execute("SELECT value FROM counters WHERE name='products'").fetchone()[0]
+    pid=max(largest,current)
+    c.execute("UPDATE counters SET value=? WHERE name='products'",(pid+1,))
+    return pid
 
 
 def rsd_to_minor(rsd, cfg):

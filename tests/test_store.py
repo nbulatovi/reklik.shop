@@ -23,6 +23,7 @@ import app as web
 import payments
 import addresses
 import specifications
+import inventory_rules
 import rates
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -38,7 +39,7 @@ class StoreTests(unittest.TestCase):
             c.execute("UPDATE categories SET shipping_overrides='{}',weight_kg=5 WHERE id=1")
             c.execute('''INSERT INTO products(id,category_id,title,slug,brand,price_cents,quantity,condition,
               description,specs,images,weight_kg,active,created_at,updated_at) VALUES(1,1,?,?,?,?,?,?,?,?,?,5,1,?,?)''',
-              ('Test ThinkPad Čačak','test-thinkpad','Lenovo',30000,1,'Refurbished — odlično','Testirani uređaj',
+              ('Test ThinkPad Čačak','test-thinkpad','Lenovo',30000,1,inventory_rules.GRADES[1],'Testirani uređaj',
                json.dumps({'Procesor':'Core i5','Memorija':'16 GB'}),'[]',store.now(),store.now()))
         store.set_settings({'eur_rsd':'117.2','eur_rsd_date':datetime.now(ZoneInfo('Europe/Belgrade')).date().isoformat(),'eur_rsd_source':rates.SOURCE})
         with store.connect(True) as c:c.execute('UPDATE products SET base_price_cents=28500 WHERE id=1')
@@ -295,7 +296,7 @@ class StoreTests(unittest.TestCase):
     def test_login_and_mobile_camera_controls(self):
         html=self.login()
         self.assertIn('capture="environment"',html)
-        self.assertIn('Napravi sličan',html)
+        self.assertIn('Dupliraj',html);self.assertIn('Obriši trajno',html)
         self.assertEqual(self.client.get('/admin/?edit=1').status_code,200)
         self.assertEqual(self.client.get('/admin/?tab=settings').status_code,200)
 
@@ -415,7 +416,7 @@ class StoreTests(unittest.TestCase):
 
     def test_specs_cache_prevents_repeated_cli_jobs(self):
         import specifications,hashlib
-        key=hashlib.sha256((store.fold('Dell')+'|'+store.fold('Latitude 5420')).encode()).hexdigest()
+        key=hashlib.sha256(('missing-v2|'+store.fold('Dell')+'|'+store.fold('Latitude 5420')+'|{}').encode()).hexdigest()
         with store.connect(True) as c:c.execute('INSERT INTO model_specs VALUES(?,?,?,NULL)',(key,json.dumps({'specs':{'Ekran':'14 inča'}}),store.now()))
         with patch.object(specifications.WORKERS,'submit') as submit:
             result=specifications.start('Latitude 5420','Dell')
@@ -453,7 +454,7 @@ class StoreTests(unittest.TestCase):
             c.execute("UPDATE products SET description='Moj ručni opis',specs=?,price_cents=41000,quantity=0,revision=revision+1 WHERE id=1",(json.dumps({'RAM':'32 GB'}),))
         specifications.finish_product(1,self.ai_result(),job)
         product=store.product(1,admin=True)
-        self.assertEqual(product['description'],'Moj ručni opis');self.assertEqual(product['specs'],{'RAM':'32 GB'})
+        self.assertEqual(product['description'],'Moj ručni opis');self.assertEqual(product['specs']['RAM'],'32 GB');self.assertEqual(product['specs']['Ekran'],'6,1 inča')
         self.assertEqual(product['price_cents'],41000);self.assertEqual(product['quantity'],0)
 
     def test_background_ai_does_not_overwrite_new_model_or_manual_fields(self):
@@ -471,6 +472,7 @@ class StoreTests(unittest.TestCase):
 
     def test_background_ai_cached_completion_and_restart_recovery(self):
         data=self.ai_result()
+        with store.connect(True) as c:c.execute("UPDATE products SET description='' WHERE id=1")
         with patch.object(specifications,'start',return_value=data):specifications.queue_product(1,['description'])
         self.assertEqual(store.product(1)['description'],data['result']['description'])
         specifications.queue_product(1,['specs'])
@@ -481,13 +483,105 @@ class StoreTests(unittest.TestCase):
         self.assertNotEqual(old,new)
         self.assertEqual(specifications.status(old)['status'],'failed')
         specifications.update(new,'completed',data)
-        self.assertEqual(store.product(1)['specs'],data['result']['specs'])
+        self.assertEqual(store.product(1)['specs'],{'Procesor':'Core i5','RAM':'16 GB','Ekran':'6,1 inča'})
 
     def test_ai_inventory_status_is_private_and_admin_button_is_at_footer(self):
         self.assertEqual(self.client.get('/admin/inventory-status').status_code,302)
         html=self.client.get('/').get_data(as_text=True)
         self.assertIn('footer-admin',html)
         self.assertLess(html.index('data-product-grid'),html.index('footer-admin'))
+
+    def test_specs_merge_only_missing_with_consistent_labels(self):
+        manual=inventory_rules.parse_specs('cpu: Intel Core i5\nmemorija: 16 GB\ndisk: 512 GB SSD\nWi-Fi: Moj unos')
+        merged=inventory_rules.merge_missing(manual,{'Procesor':'Drugi CPU','RAM':'8 GB','SSD':'128 GB','Display':'14 inča','Wi-Fi':'Drugo'})
+        self.assertEqual(merged,{'Procesor':'Intel Core i5','RAM':'16 GB','Skladište':'512 GB SSD','Ekran':'14 inča','Wi-Fi':'Moj unos'})
+        repeated=inventory_rules.parse_specs('RAM: 8 GB\nRAM: 16 GB\nRAM: 32 GB\nPodatak bez dvotačke')
+        self.assertEqual(len(repeated),4)
+        self.assertIn('32 GB',repeated.values())
+
+    def test_spec_jobs_are_specific_to_manual_configuration(self):
+        first=specifications.start('ThinkPad T14','Lenovo',{'RAM':'8 GB'})
+        second=specifications.start('ThinkPad T14','Lenovo',{'RAM':'32 GB'})
+        same=specifications.start('ThinkPad T14','Lenovo',{'Memorija':'8 GB'})
+        self.assertNotEqual(first['id'],second['id']);self.assertEqual(first['id'],same['id'])
+
+    def test_condition_migration_is_conservative_and_repeatable(self):
+        pairs=[('Novo','',0),('Novo-sitni tragovi na kućištu','',2),('Refurbished — odlično','',1),
+               ('U veoma dobrom stanju','',2),('Obnovljeno-B grade','Par ogrebotina na staklu',3),
+               ('Refurbished — veoma dobro','Telefon ima tragova upotrebe',4),('Grade C','',5)]
+        for old,description,index in pairs:
+            self.assertEqual(inventory_rules.grade(old,description),inventory_rules.GRADES[index])
+        with store.connect(True) as c:
+            c.execute("DELETE FROM migrations WHERE name='refabrikovani-grades-v1'")
+            c.execute("UPDATE products SET condition=?,description=? WHERE id=1",('Novo-sitni tragovi na kućištu','Obnovljen uređaj, moj opis.'))
+        before=store.product(1,admin=True)
+        store.init_db();after=store.product(1,admin=True)
+        for key in ('price_cents','base_price_cents','quantity','images','specs','active'):
+            self.assertEqual(before[key],after[key])
+        self.assertEqual(after['condition'],inventory_rules.GRADES[2]);self.assertIn('Refabrikovan',after['description'])
+        revision=after['revision'];store.init_db()
+        self.assertEqual(store.product(1,admin=True)['revision'],revision)
+
+    def photo_product(self):
+        from PIL import Image
+        html=self.login();csrf=self.hidden(html,'csrf')
+        image=io.BytesIO();Image.new('RGB',(3200,2400),'orange').save(image,'JPEG');image.seek(0)
+        response=self.client.post('/admin/product',data={'csrf':csrf,'title':'Photo device','brand':'Dell','price':'200','quantity':'2','category_id':'1','active':'yes','specs':'RAM: 16 GB','photos':(image,'camera.jpg')})
+        self.assertEqual(response.status_code,302)
+        return csrf,next(p for p in store.products(admin=True) if p['title']=='Photo device')
+
+    def test_photo_resolution_and_visibility(self):
+        from PIL import Image
+        csrf,product=self.photo_product();image=product['images'][0]
+        with Image.open(store.UPLOADS/image) as im:self.assertEqual(im.size,(1600,1200))
+        with Image.open(store.ORIGINALS/image.replace('.webp','.jpg')) as im:self.assertEqual(im.size,(3200,2400))
+        self.assertEqual(product['active'],1);self.assertEqual(product['condition'],inventory_rules.GRADES[1])
+        page=self.client.get('/proizvod/'+product['slug']+'/').get_data(as_text=True)
+        self.assertIn('/media/full/',page);self.assertIn('data-photo-zoom',page)
+        with self.client.get('/media/full/'+image.replace('.webp','.jpg')) as response:self.assertEqual(response.status_code,200)
+        self.client.post('/admin/product/'+str(product['id'])+'/visibility',data={'csrf':csrf,'visible':'0'})
+        self.assertIsNone(store.product(product['id']));self.assertIsNotNone(store.product(product['id'],admin=True))
+        self.assertEqual(self.client.get('/proizvod/'+product['slug']+'/').status_code,404)
+        import publisher
+        self.assertNotIn(product['id'],[p['id'] for p in publisher.public_catalog()['products']])
+        self.client.post('/admin/product/'+str(product['id'])+'/visibility',data={'csrf':csrf,'visible':'1'})
+        self.assertIsNotNone(store.product(product['id']))
+
+    def test_duplicate_and_delete_preserve_shared_photos_and_order_history(self):
+        csrf,product=self.photo_product();pid=product['id'];image=product['images'][0]
+        # Capture an immutable order before removing the inventory entry.
+        order=store.create_order([{'id':pid,'qty':1,'warranty':0}],{'name':'Buyer','phone':'063123456','email':''},
+                  {'country':'RS','method':'pickup','courier':'post-express','city':'','address':'','postal_code':''},'cod','delete-history')
+        self.client.post('/admin/product/'+str(pid)+'/duplicate',data={'csrf':csrf})
+        duplicate=next(p for p in store.products(admin=True) if p['title']==product['title'] and p['id']!=pid)
+        self.assertEqual(duplicate['quantity'],1);self.assertEqual(duplicate['active'],1)
+        for key in ('images','specs','base_price_cents','price_cents','condition','description'):
+            self.assertEqual(duplicate[key],product[key])
+        self.assertNotEqual(duplicate['slug'],product['slug'])
+        self.client.post('/admin/product/'+str(pid)+'/delete',data={'csrf':csrf,'revision':store.product(pid,admin=True)['revision']})
+        self.assertIsNone(store.product(pid,admin=True));self.assertTrue((store.UPLOADS/image).is_file())
+        self.assertEqual(store.order_by_token(order['token'])['items'],order['items'])
+        self.client.post('/admin/product/'+str(duplicate['id'])+'/delete',data={'csrf':csrf,'revision':duplicate['revision']})
+        self.assertFalse((store.UPLOADS/image).exists());self.assertFalse((store.ORIGINALS/image.replace('.webp','.jpg')).exists())
+        with store.connect(True) as c:new_id=store.next_product_id(c)
+        self.assertGreater(new_id,max(pid,duplicate['id']))
+        store.change_order_status(order['id'],'cancelled')
+        self.assertIsNone(store.product(pid,admin=True))
+        with store.connect() as c:
+            self.assertIsNone(c.execute('SELECT * FROM product_ai WHERE product_id=?',(pid,)).fetchone())
+
+    def test_inventory_mutations_require_admin_csrf_and_current_revision(self):
+        for action in ('visibility','duplicate','delete'):
+            self.assertEqual(self.client.post('/admin/product/1/'+action,data={}).status_code,403)
+        html=self.login();csrf=self.hidden(html,'csrf')
+        for action in ('visibility','duplicate','delete'):
+            self.assertEqual(self.client.post('/admin/product/1/'+action,data={'csrf':'forged'}).status_code,403)
+        response=self.client.post('/admin/product/1/delete',data={'csrf':csrf,'revision':999})
+        self.assertIn('error=',response.location);self.assertIsNotNone(store.product(1,admin=True))
+        page=self.client.get('/admin/').get_data(as_text=True)
+        self.assertEqual(page.count('<option value="Refabrikovano -'),5)
+        with store.connect(True) as c:c.execute("UPDATE products SET condition='Novo' WHERE id=1")
+        self.assertIn('https://schema.org/NewCondition',self.client.get('/proizvod/test-thinkpad/').get_data(as_text=True))
 
     def test_domain_does_not_cut_over_while_dns_points_to_parking(self):
         import domain,publisher

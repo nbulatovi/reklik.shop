@@ -41,7 +41,7 @@ def create_checkout(order, origin):
                  'plan_type': 'one_time', 'initial_price': order['total_minor'] / 100,
                  'title': ('ReKlik ' + order['id'])[:60], 'force_create_new_plan': True,
                  'adaptive_pricing_enabled': False, 'stock': 1,
-                 'product': {'title': 'ReKlik — test plaćanja' if order['test_order'] else 'ReKlik — obnovljena tehnologija',
+                 'product': {'title': 'ReKlik — test plaćanja' if order['test_order'] else 'ReKlik — refabrikovana tehnologija',
                              'external_identifier': 'reklik-' + order['id'],
                              'custom_statement_descriptor': 'WHOP*REKLIK SHOP',
                              'description': 'Jednokratna kupovina. ' + order['id']}},

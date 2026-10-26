@@ -39,10 +39,13 @@ def export():
     temp.mkdir()
     shutil.copytree(store.ROOT / 'assets', temp / 'assets')
     (temp / 'media').mkdir()
+    (temp / 'media/full').mkdir()
     for p in store.products():
         for image in p['images']:
             if (store.UPLOADS / image).is_file():
                 shutil.copy2(store.UPLOADS / image, temp / 'media' / image)
+                original=store.ORIGINALS/image.replace('.webp','.jpg')
+                if original.is_file():shutil.copy2(original,temp/'media/full'/original.name)
     base = urlparse(cfg['site_url']).path.rstrip('/')
     urls = []
     def page(path, template, **context):
@@ -54,11 +57,11 @@ def export():
         if not context.get('private_page'):
             urls.append(path)
     all_products = store.products()
-    page('/', 'home.html', products=all_products, category=None, query='', page_title='Sertifikovano obnovljeni laptopovi, telefoni i tableti')
-    page('/katalog/', 'catalog.html', products=all_products, category=None, query='', page_title='Katalog obnovljenih uređaja')
+    page('/', 'home.html', products=all_products, category=None, query='', page_title='Sertifikovano refabrikovani laptopovi, telefoni i tableti')
+    page('/katalog/', 'catalog.html', products=all_products, category=None, query='', page_title='Katalog refabrikovanih uređaja')
     for cat in store.categories():
         page('/kategorija/' + cat['slug'] + '/', 'catalog.html', products=store.products(category=cat['slug']), category=cat,
-             query='', page_title=cat['name'] + ' — sertifikovano obnovljeno')
+             query='', page_title=cat['name'] + ' — sertifikovano refabrikovano')
     for p in all_products:
         page('/proizvod/' + p['slug'] + '/', 'product.html', product=p, page_title=p['title'])
     titles = {'o-nama':'Nova prilika za odličnu tehnologiju','dostava':'Dostava i preuzimanje',
@@ -113,7 +116,7 @@ def publish(push=True):
         if not (store.ROOT / '.git').exists():
             return {'pages': count, 'pushed': False}
         git('add','--','docs','assets','templates','app.py','store.py','payments.py','publisher.py',
-            'ai_editor.py','editor_guard.mjs','specifications.py','specs_guard.mjs','addresses.py','runtime.py','domain.py','notifications.py','rates.py','setup.py','requirements.txt','.gitignore','README.md','tests')
+            'ai_editor.py','editor_guard.mjs','specifications.py','specs_guard.mjs','addresses.py','runtime.py','domain.py','notifications.py','rates.py','inventory_rules.py','setup.py','requirements.txt','.gitignore','README.md','tests')
         changed = git('diff','--cached','--quiet',check=False).returncode != 0
         if changed:
             git('commit','-m','Update ReKlik storefront and catalog')

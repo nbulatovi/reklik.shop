@@ -66,7 +66,8 @@ timeoutSec = 20
         args += ['--setenv','HOME',str(Path.home()),'--setenv','CODEX_HOME','/ai-home',
                  '--setenv','PATH',str(NODE.parent)+':/usr/bin:/bin','--chdir','/site','--',str(CODEX),
                  'exec','--skip-git-repo-check','--json','--dangerously-bypass-hook-trust','--ephemeral','-']
-        instruction = '''You edit ReKlik.shop, a real refurbished electronics store. Work only in /site.
+        instruction = '''You edit ReKlik.shop, a real electronics store selling refabrikovani uređaji. Work only in /site.
+Use Serbian Latin spelling and the term "refabrikovani", never "obnovljeni" or "refurbished" in storefront copy. Preserve all manually entered specifications and the six inventory condition grades.
 You can edit templates, assets, and the existing app.py/store.py/payments.py/addresses.py modules.
 Use read-only shell commands for inspection and apply_patch for changes. Do not change infrastructure or tests.
 Never read or print credentials. Customer data and production inventory are not mounted.
