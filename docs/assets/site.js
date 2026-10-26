@@ -13,16 +13,6 @@
   countCart();
   window.addEventListener('storage', countCart);
 
-  const viewedProduct = $('[data-product-view]');
-  if (viewedProduct) {
-    const record = origin => fetch(origin+'/views/product/'+encodeURIComponent(viewedProduct.dataset.productView),{mode:'no-cors',credentials:'omit',cache:'no-store',keepalive:true}).catch(()=>{});
-    if (live) record(location.origin);
-    else fetch(base+'/backend.json?t='+Date.now(),{cache:'no-store'}).then(r=>r.json()).then(data=>{
-      const backend=new URL(data.backend);
-      if(backend.protocol==='https:' && /^[a-z0-9-]+\.trycloudflare\.com$/.test(backend.hostname))record(backend.origin);
-    }).catch(()=>{});
-  }
-
   $$('[data-add-cart]').forEach(button => button.addEventListener('click', () => {
     const id = Number(button.dataset.addCart), warranty = Number($('#warranty')?.value || 0), items = readCart();
     const item = items.find(x => x.id === id && x.warranty === warranty);
