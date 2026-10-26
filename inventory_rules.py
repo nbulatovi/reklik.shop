@@ -13,7 +13,10 @@ GRADES=(
 
 
 def fold(text):
-    return unicodedata.normalize('NFKD',str(text).lower().replace('đ','dj')).encode('ascii','ignore').decode()
+    cyr=dict(zip('абвгдђежзијклљмнњопрстћуфхцчџш',
+        ['a','b','v','g','d','dj','e','z','z','i','j','k','l','lj','m','n','nj','o','p','r','s','t','c','u','f','h','c','c','dz','s']))
+    text=''.join(cyr.get(ch,ch) for ch in str(text).lower()).replace('đ','dj')
+    return unicodedata.normalize('NFKD',text).encode('ascii','ignore').decode()
 
 
 def grade(previous,description=''):

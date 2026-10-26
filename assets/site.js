@@ -102,7 +102,9 @@
   if ($('[data-cart-items]')) {
     fetch(base + '/catalog.json', {cache: 'no-store'}).then(r => { if (!r.ok) throw Error(); return r.json(); }).then(data => {
       const render = () => {
-        const items = readCart(), host = $('[data-cart-items]'); host.replaceChildren(); let total = 0;
+        const before=readCart(),items=before.filter(line=>data.products.some(p=>p.id===Number(line.id)));
+        if(items.length!==before.length)saveCart(items);
+        const host = $('[data-cart-items]'); host.replaceChildren(); let total = 0;
         items.forEach((line, index) => {
           const p = data.products.find(p => p.id === Number(line.id)); if (!p) return;
           const row = node('article', {class: 'cart-item'}), img = node('img', {src: p.images.length ? base + '/media/' + p.images[0] : p.catalog_image ? base+'/assets/'+p.catalog_image : base + '/assets/favicon.svg', alt: p.title, width: '90', height: '80'});

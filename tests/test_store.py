@@ -503,6 +503,8 @@ class StoreTests(unittest.TestCase):
         aliased=inventory_rules.merge_missing({'CPU':'Prvi','Procesor':'Drugi','Napomena':long.strip()},{'Procesor':'AI','Ekran':'14 inča'})
         self.assertIn('Prvi',aliased.values());self.assertIn('Drugi',aliased.values())
         self.assertEqual(aliased['Napomena'],long.strip());self.assertNotIn('AI',aliased.values())
+        cyrillic=inventory_rules.merge_missing({'Процесор':'Мој процесор','РАМ':'16 GB','Складиште':'512 GB'},{'CPU':'AI','Memorija':'8 GB','SSD':'128 GB','Ekran':'14 inča'})
+        self.assertEqual(cyrillic,{'Procesor':'Мој процесор','RAM':'16 GB','Skladište':'512 GB','Ekran':'14 inča'})
 
     def test_spec_jobs_are_specific_to_manual_configuration(self):
         first=specifications.start('ThinkPad T14','Lenovo',{'RAM':'8 GB'})
@@ -584,7 +586,7 @@ class StoreTests(unittest.TestCase):
         response=self.client.post('/admin/product/1/delete',data={'csrf':csrf,'revision':999})
         self.assertIn('error=',response.location);self.assertIsNotNone(store.product(1,admin=True))
         page=self.client.get('/admin/').get_data(as_text=True)
-        self.assertEqual(page.count('<option value="Refabrikovano -'),5)
+        self.assertEqual(page.count('type="radio" name="condition"'),6)
         with store.connect(True) as c:c.execute("UPDATE products SET condition='Novo' WHERE id=1")
         self.assertIn('https://schema.org/NewCondition',self.client.get('/proizvod/test-thinkpad/').get_data(as_text=True))
 

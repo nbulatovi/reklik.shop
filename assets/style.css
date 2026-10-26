@@ -178,8 +178,26 @@ body p{font-size:16px!important;line-height:1.7}body small{font-size:14px!import
 .photo-zoom-toolbar{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:4px 10px;padding:6px;background:white;flex-shrink:0;border-bottom:1px solid #ddd}
 .photo-zoom-toolbar button,.photo-zoom-toolbar a{display:inline-flex;align-items:center;justify-content:center;gap:4px;min-height:44px;padding:8px;border:0;background:none;color:inherit;font-size:16px;border-radius:6px}
 .photo-zoom-toolbar button:hover,.photo-zoom-toolbar a:hover{background:#ffe7cc}
-.photo-zoom-toolbar [data-zoom-next] svg{transform:rotate(180deg)}
+.photo-zoom-toolbar [data-zoom-prev] svg{transform:rotate(180deg)}
 .photo-zoom-scroll{flex:1;min-height:0;overflow:auto;display:flex;align-items:center;justify-content:center;overscroll-behavior:contain}
 .photo-zoom-scroll img{width:auto;height:auto;max-width:100%;max-height:100%;object-fit:contain;cursor:zoom-in}
 .photo-zoom-scroll.original-size{display:block}
 .photo-zoom-scroll.original-size img{display:block;max-width:none;max-height:none;cursor:zoom-out;margin:auto}
+
+/* Condition descriptions wrap in normal flow and never cover device photos. */
+.product-card .product-body .condition-tag{position:static;display:block;width:auto;max-width:100%;margin:5px 0 7px;padding:0;background:none;border-radius:0;font-size:14px;line-height:1.4;white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere}
+.device-gallery .device-condition{position:static;grid-column:1/-1;grid-row:2;max-width:100%;margin:5px 0 0;padding:6px 8px;font-size:14px;line-height:1.4;white-space:normal;overflow:visible;overflow-wrap:anywhere;background:#fff6eb}
+.condition-choices{min-width:0;margin:20px 0;border:0;padding:0}
+.condition-choices legend{font-size:18px;font-weight:700;margin-bottom:7px}
+.grade-option{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;margin:6px 0;border:1px solid #d2c6b9;border-radius:7px;font-size:16px;line-height:1.45;cursor:pointer}
+.grade-option:has(input:checked){border-color:#e76500;background:#fff6eb}
+.grade-option input{flex:0 0 20px;width:20px;height:20px;margin:2px 0 0;min-height:20px;accent-color:#e76500}
+.grade-option span{font-size:16px;min-width:0;white-space:normal;overflow-wrap:anywhere}
+.inventory-row .inventory-condition{font-size:14px;line-height:1.45;white-space:normal;overflow-wrap:anywhere}
+
+.payment-marks{flex-wrap:wrap}
+@media(max-width:600px){
+ .device-gallery{display:contents}
+ .device-gallery .device-main-image{grid-column:1;grid-row:1/span 4}
+ .device-gallery .device-condition{grid-column:1/-1;grid-row:5;margin-top:0}
+}
