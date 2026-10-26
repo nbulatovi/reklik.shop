@@ -41,11 +41,11 @@ def create_checkout(order, origin):
                  'plan_type': 'one_time', 'initial_price': order['total_minor'] / 100,
                  'title': ('ReKlik ' + order['id'])[:60], 'force_create_new_plan': True,
                  'adaptive_pricing_enabled': False, 'stock': 1,
+                 'payment_method_configuration': {'enabled':['card','apple_pay'],'disabled':[],'include_platform_defaults':False},
                  'product': {'title': 'ReKlik — test plaćanja' if order['test_order'] else 'ReKlik — refabrikovana tehnologija',
                              'external_identifier': 'reklik-' + order['id'],
                              'custom_statement_descriptor': 'WHOP*REKLIK SHOP',
                              'description': 'Jednokratna kupovina. ' + order['id']}},
-        'payment_method_configuration': {'enabled':['card'],'disabled':[],'include_platform_defaults':False},
         'metadata': {'store': 'reklik', 'order_id': order['id'], 'test_order': str(bool(order['test_order'])).lower()},
         'checkout_styling': {'button_color': '#fb7701', 'background_color': '#ffffff'},
     }

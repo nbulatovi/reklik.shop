@@ -159,8 +159,9 @@ class StoreTests(unittest.TestCase):
         payload=api.call_args.kwargs['json']
         self.assertFalse(payload['plan']['adaptive_pricing_enabled'])
         self.assertEqual(payload['plan']['stock'],1)
-        self.assertEqual(payload['payment_method_configuration']['enabled'],['card'])
-        self.assertFalse(payload['payment_method_configuration']['include_platform_defaults'])
+        self.assertNotIn('payment_method_configuration',payload)
+        self.assertEqual(payload['plan']['payment_method_configuration']['enabled'],['card','apple_pay'])
+        self.assertFalse(payload['plan']['payment_method_configuration']['include_platform_defaults'])
         self.assertTrue(payload['plan']['product']['custom_statement_descriptor'].startswith('WHOP*'))
 
     def test_ascii_serbian_names_accepted(self):
@@ -498,6 +499,10 @@ class StoreTests(unittest.TestCase):
         repeated=inventory_rules.parse_specs('RAM: 8 GB\nRAM: 16 GB\nRAM: 32 GB\nPodatak bez dvotačke')
         self.assertEqual(len(repeated),4)
         self.assertIn('32 GB',repeated.values())
+        long='Ručni podatak '*40
+        aliased=inventory_rules.merge_missing({'CPU':'Prvi','Procesor':'Drugi','Napomena':long.strip()},{'Procesor':'AI','Ekran':'14 inča'})
+        self.assertIn('Prvi',aliased.values());self.assertIn('Drugi',aliased.values())
+        self.assertEqual(aliased['Napomena'],long.strip());self.assertNotIn('AI',aliased.values())
 
     def test_spec_jobs_are_specific_to_manual_configuration(self):
         first=specifications.start('ThinkPad T14','Lenovo',{'RAM':'8 GB'})

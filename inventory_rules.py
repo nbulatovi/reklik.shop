@@ -43,7 +43,7 @@ LABELS={
 
 
 def label(key):
-    key=str(key).strip()[:60]
+    key=str(key).strip()
     return LABELS.get(fold(key),key[:1].upper()+key[1:])
 
 
@@ -55,10 +55,15 @@ def family(key):
 def normalize_specs(specs):
     result={}
     for key,value in specs.items():
-        name=label(key);value=str(value).strip()[:300]
+        name=label(key);value=str(value).strip()
         if not name or not value:continue
         # Preserve both legacy entries if two aliases contain different values.
-        if name in result and result[name]!=value:name=str(key).strip()
+        if name in result:
+            if result[name]==value:continue
+            raw=str(key).strip();name=raw if raw not in result else label(key)
+            original=name;number=2
+            while name in result:
+                name=original+' ('+str(number)+')';number+=1
         result[name]=value
     order={'Procesor':0,'RAM':1,'SSD':2,'HDD':3,'Skladište':4,'Grafika':5,'Ekran':6,'Rezolucija':7,'Operativni sistem':8}
     return dict(sorted(result.items(),key=lambda pair:(order.get(pair[0],20),fold(pair[0]))))
@@ -74,7 +79,7 @@ def merge_missing(manual,extra):
 
 def parse_specs(text):
     specs={};notes=0
-    for line in str(text).splitlines()[:60]:
+    for line in str(text).splitlines():
         if not line.strip():continue
         if ':' in line:key,value=line.split(':',1)
         else:
