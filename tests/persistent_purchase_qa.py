@@ -19,7 +19,7 @@ from PIL import Image
 from werkzeug.security import generate_password_hash
 from datetime import datetime
 from zoneinfo import ZoneInfo
-store.set_settings({'site_url':'https://reklik.shop','eur_rsd':'117.2','eur_rsd_date':datetime.now(ZoneInfo('Europe/Belgrade')).date().isoformat(),'eur_rsd_source':rates.SOURCE})
+store.set_settings({'site_url':'http://127.0.0.1:4346','eur_rsd':'117.2','eur_rsd_date':datetime.now(ZoneInfo('Europe/Belgrade')).date().isoformat(),'eur_rsd_source':rates.SOURCE})
 (store.STATE/'private.json').write_text(json.dumps({'secret':'purchase-qa','password_hash':generate_password_hash('purchase-qa')}))
 image='abcdef0123456789abcdef01.webp';Image.new('RGB',(1200,900),'silver').save(store.UPLOADS/image)
 specs={'Procesor':'Intel Core i5','RAM':'16 GB','SSD':'512 GB','Ekran':'14 inča, Full HD'}

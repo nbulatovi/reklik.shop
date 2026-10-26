@@ -1,0 +1,8 @@
+<section id="item-analytics" class="item-analytics" aria-labelledby="item-analytics-title">
+<h2 id="item-analytics-title">Analitika uređaja</h2>
+<p>Jedinstvene IP adrese po koraku. Ponovljeni klikovi sa iste adrese ne povećavaju broj; više ljudi na istoj mreži može imati zajedničku adresu.</p>
+<dl class="analytics-metrics">{% for metric in item_analytics.metrics %}<div><dt>{{metric.label}}</dt><dd>{{metric.count}}</dd></div>{% endfor %}</dl>
+{% if item_analytics.errors %}<h3>Razlozi grešaka</h3><dl class="analytics-errors">{% for reason in item_analytics.errors %}<div><dt>{{reason.label}}</dt><dd>{{reason.count}}</dd></div>{% endfor %}</dl>{% endif %}
+<p class="settings-note">Greška i uspeh mogu obuhvatiti istu adresu ako je kupac ispravio podatke. „Pokušaji pouzeća bez porudžbine“ isključuje adrese sa uspešnom porudžbinom. Naplata otvorena pre više od 30 minuta bez porudžbine nije dokaz greške niti odustajanja. Zatvaranje stranice bez slanja forme ne otkriva razlog.</p>
+<p class="settings-note">Pregledi uključuju raniji brojač. Ostali koraci prate se od <time data-analytics-start="{{item_analytics.started_at}}">{{item_analytics.started_at|int|timestamp_date}}</time>. Poznati roboti i zahtevi iz administratorske sesije se preskaču. Javne posete administratora mogu biti uključene.</p>
+</section>

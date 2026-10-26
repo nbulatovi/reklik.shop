@@ -112,6 +112,15 @@ def init_db():
           product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
           visitor_hash TEXT NOT NULL, first_seen INTEGER NOT NULL,
           PRIMARY KEY(product_id,visitor_hash));
+        CREATE TABLE IF NOT EXISTS item_events(
+          product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+          stage TEXT NOT NULL,visitor_hash TEXT NOT NULL,reason TEXT NOT NULL DEFAULT '',
+          first_seen INTEGER NOT NULL,last_seen INTEGER NOT NULL,hits INTEGER NOT NULL DEFAULT 1,
+          PRIMARY KEY(product_id,stage,visitor_hash,reason));
+        CREATE TABLE IF NOT EXISTS order_visitors(
+          order_id TEXT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+          product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,visitor_hash TEXT NOT NULL,
+          PRIMARY KEY(order_id,product_id,visitor_hash));
         CREATE TABLE IF NOT EXISTS model_specs(
           cache_key TEXT PRIMARY KEY,result TEXT,updated_at INTEGER NOT NULL,job_id TEXT);
         CREATE TABLE IF NOT EXISTS product_ai(
@@ -130,6 +139,9 @@ def init_db():
         CREATE TABLE IF NOT EXISTS migrations(name TEXT PRIMARY KEY,applied_at INTEGER NOT NULL);
         ''')
         c.execute('BEGIN IMMEDIATE')
+        if not c.execute("SELECT 1 FROM migrations WHERE name='item-funnel-v1'").fetchone():
+            c.execute("INSERT OR IGNORE INTO item_events SELECT product_id,'view',visitor_hash,'',first_seen,first_seen,1 FROM item_views")
+            c.execute("INSERT INTO migrations VALUES('item-funnel-v1',?)",(now(),))
         ai_columns={row['name'] for row in c.execute('PRAGMA table_info(product_ai)')}
         if 'attempts' not in ai_columns:c.execute('ALTER TABLE product_ai ADD COLUMN attempts INTEGER NOT NULL DEFAULT 1')
         if 'retry_at' not in ai_columns:
@@ -408,7 +420,7 @@ def release_expired():
         return len(expired)
 
 
-def create_order(raw, customer, delivery, method, idem, test=False, expected=None):
+def create_order(raw, customer, delivery, method, idem, test=False, expected=None, visitors=None):
     if method not in ('cod', 'card', 'pickup'):
         raise ValueError('Izaberite način plaćanja.')
     cfg = settings()
@@ -445,6 +457,9 @@ def create_order(raw, customer, delivery, method, idem, test=False, expected=Non
         if not test:
             c.execute("INSERT INTO order_notifications(order_id,event,created_at) VALUES(?,'new_order',?)",(oid,now()))
         c.execute('UPDATE orders SET pricing=? WHERE id=?',(json.dumps(q['pricing']),oid))
+        if visitors and not test:
+            import analytics
+            analytics.bind_order(c,oid,visitors,method)
         return unpack(c.execute('SELECT * FROM orders WHERE id=?', (oid,)).fetchone())
 
 

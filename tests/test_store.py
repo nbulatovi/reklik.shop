@@ -412,6 +412,159 @@ class StoreTests(unittest.TestCase):
         self.assertEqual(store.products(admin=True)[0]['unique_views'],1)
         self.assertEqual(self.client.get('/views/product/9999').status_code,404)
 
+    def test_native_item_events_deduplicate_and_do_not_set_cookies(self):
+        import analytics
+        for ip in ('192.0.2.15','::ffff:192.0.2.15','192.0.2.16'):
+            for path in ('/analytics/view/1.gif','/analytics/buy/1?warranty=2','/analytics/cart/1'):
+                result=self.client.get(path,headers={'CF-Connecting-IP':ip,'User-Agent':'Mozilla/5.0'})
+                self.assertIn(result.status_code,(200,204,302))
+                self.assertNotIn('Set-Cookie',result.headers)
+                self.assertEqual(result.headers['Cache-Control'],'no-store')
+                if 'view/' in path:
+                    self.assertEqual(result.mimetype,'image/gif')
+                    self.assertEqual(result.headers['Access-Control-Allow-Origin'],'*')
+                if 'buy/' in path:self.assertTrue(result.location.endswith('/checkout/?buy=1&warranty=2'))
+        stats=analytics.summary(1)['counts']
+        for stage in ('view','buy_now','cart_click'):self.assertEqual(stats[stage],2)
+        with store.connect() as c:records=[dict(r) for r in c.execute('SELECT * FROM item_events')]
+        self.assertNotIn('192.0.2',json.dumps(records))
+        self.assertNotEqual(analytics.actor('192.0.2.15','test-only-secret',1),analytics.actor('192.0.2.15','test-only-secret',2))
+
+    def test_analytics_excludes_prefetch_bots_hidden_items_and_admin_checkout(self):
+        import analytics
+        for headers in ({'Purpose':'prefetch'},{'Sec-Purpose':'prefetch;prerender'},{'User-Agent':'Googlebot'}):
+            self.client.get('/analytics/view/1.gif',headers=headers)
+            self.client.get('/analytics/buy/1',headers=headers)
+        self.assertEqual(analytics.summary(1)['counts'],{'view':0})
+        self.login();self.client.get('/checkout/?buy=1')
+        self.assertNotIn('checkout_open',analytics.summary(1)['counts'])
+        with store.connect(True) as c:c.execute('UPDATE products SET active=0 WHERE id=1')
+        for path in ('/analytics/view/1.gif','/analytics/buy/1','/analytics/cart/1'):
+            self.assertEqual(self.client.get(path).status_code,404)
+
+    def test_cod_error_then_success_tracks_unique_attempt_and_recovery(self):
+        import analytics
+        data=self.checkout_form(phone='')
+        for _ in range(2):self.assertEqual(self.client.post('/checkout/',data=data).status_code,422)
+        stats=analytics.summary(1)
+        self.assertEqual(stats['counts']['cod_attempt'],1)
+        self.assertEqual(stats['counts']['cod_failed'],1)
+        self.assertEqual(stats['errors'],[{'label':'Nedostaje telefon','count':1}])
+        self.assertEqual(next(m['count'] for m in stats['metrics'] if m['key']=='cod_uncompleted'),1)
+        data['phone']='0631234567'
+        response=self.client.post('/checkout/',data=data)
+        self.assertEqual(response.status_code,302)
+        # Browser retry reuses the existing order and does not add another conversion.
+        self.assertEqual(self.client.post('/checkout/',data=data).status_code,303)
+        stats=analytics.summary(1)
+        for stage in ('checkout_open','checkout_attempt','cod_attempt','cod_failed','cod_order','order_created'):
+            self.assertEqual(stats['counts'][stage],1,stage)
+        self.assertEqual(next(m['count'] for m in stats['metrics'] if m['key']=='cod_uncompleted'),0)
+        with store.connect() as c:self.assertEqual(c.execute('SELECT count(*) FROM order_visitors').fetchone()[0],1)
+
+    def test_failed_cod_attempts_from_distinct_ips_and_csrf_are_counted(self):
+        import analytics
+        data=self.checkout_form(city='')
+        for ip in ('192.0.2.21','192.0.2.22'):
+            self.assertEqual(self.client.post('/checkout/',data=data,headers={'CF-Connecting-IP':ip}).status_code,422)
+        data['csrf']='invalid'
+        self.assertEqual(self.client.post('/checkout/',data=data,headers={'CF-Connecting-IP':'192.0.2.21'}).status_code,403)
+        stats=analytics.summary(1)
+        self.assertEqual(stats['counts']['cod_attempt'],2);self.assertEqual(stats['counts']['cod_failed'],2)
+        self.assertIn({'label':'Istekla ili blokirana sesija','count':1},stats['errors'])
+        self.assertIn({'label':'Nedostaje mesto za dostavu','count':2},stats['errors'])
+        with store.connect() as c:self.assertEqual(c.execute('SELECT count(*) FROM orders').fetchone()[0],0)
+
+    def test_analytics_abandoned_is_inactive_checkout_not_an_assumed_cod_failure(self):
+        import analytics
+        self.client.get('/checkout/?buy=1')
+        with store.connect(True) as c:c.execute("UPDATE item_events SET last_seen=? WHERE stage='checkout_open'",(store.now()-1900,))
+        self.assertEqual(next(m['count'] for m in analytics.summary(1)['metrics'] if m['key']=='checkout_uncompleted'),1)
+        self.client.post('/checkout/',data=self.checkout_form(phone=''))
+        self.assertEqual(next(m['count'] for m in analytics.summary(1)['metrics'] if m['key']=='checkout_uncompleted'),0)
+
+    def test_card_analytics_uses_order_visitor_and_only_verified_payment(self):
+        import analytics
+        data=self.checkout_form(payment_method='card')
+        with patch.object(payments,'create_checkout',side_effect=ValueError('test processor unavailable')):
+            self.assertEqual(self.client.post('/checkout/',data=data,headers={'CF-Connecting-IP':'192.0.2.30'}).status_code,303)
+        with store.connect(True) as c:
+            order=store.unpack(c.execute('SELECT * FROM orders').fetchone())
+            c.execute("UPDATE orders SET plan_id='plan_test' WHERE id=?",(order['id'],))
+        order=store.order_by_token(order['token'])
+        with patch.object(payments,'reconcile',return_value=False):self.client.get('/order/'+order['token']+'/?return=1&paid=true')
+        self.assertNotIn('card_paid',analytics.summary(1)['counts'])
+        with patch.object(payments,'credentials',return_value={'WHOP_COMPANY_ID':'biz_test'}):
+            wrong=self.payment(order);wrong['total']=1
+            self.assertFalse(payments.verify_payment(order,wrong))
+            self.assertTrue(payments.verify_payment(order,self.payment(order)))
+            self.assertTrue(payments.verify_payment(order,self.payment(order)))
+        stats=analytics.summary(1)['counts']
+        for stage in ('card_attempt','card_failed','card_order','card_paid'):self.assertEqual(stats[stage],1)
+        with store.connect() as c:
+            payment=c.execute("SELECT visitor_hash,hits FROM item_events WHERE stage='card_paid'").fetchone()
+        self.assertEqual(payment['visitor_hash'],analytics.actor('192.0.2.30','test-only-secret',1))
+        self.assertEqual(payment['hits'],1)
+
+    def test_analytics_preserves_historical_views_and_cascades_product_deletion(self):
+        import analytics
+        with store.connect(True) as c:
+            c.execute("INSERT INTO item_views VALUES(1,'historical-visitor',123)")
+            c.execute("DELETE FROM migrations WHERE name='item-funnel-v1'")
+        store.init_db();store.init_db()
+        self.assertEqual(analytics.summary(1)['counts']['view'],1)
+        with store.connect() as c:
+            migrated=c.execute("SELECT first_seen,hits FROM item_events WHERE stage='view'").fetchone()
+        self.assertEqual(tuple(migrated),(123,1))
+        self.client.get('/analytics/buy/1')
+        with store.connect(True) as c:c.execute('DELETE FROM products WHERE id=1')
+        with store.connect() as c:self.assertEqual(c.execute('SELECT count(*) FROM item_events').fetchone()[0],0)
+
+    def test_analytics_panel_is_private_and_checkout_uses_server_validation(self):
+        self.assertNotIn('Analitika uređaja',self.client.get('/proizvod/1/').get_data(as_text=True))
+        self.assertEqual(self.client.get('/admin/?edit=1').status_code,302)
+        self.assertIn('novalidate',self.client.get('/checkout/?buy=1').get_data(as_text=True))
+        self.login();html=self.client.get('/admin/?edit=1').get_data(as_text=True)
+        for label in ('Analitika uređaja','Pouzeće: naišli na grešku','Kartica: uplata potvrđena'):
+            self.assertIn(label,html)
+        html=self.client.get('/admin/?copy=1').get_data(as_text=True)
+        self.assertNotIn('id="item-analytics"',html)
+
+    def test_mail_bridge_redacts_private_data_and_only_queues_authorized_senders(self):
+        import mail_bridge
+        with tempfile.TemporaryDirectory() as directory:
+            config=Path(directory)/'correspondence';config.mkdir()
+            (config/'settings.json').write_text(json.dumps({'enabled':True,'correspondent':'helper@example.test','owner':'owner@example.test','mailbox':'shop@example.test'}))
+            data={'from':'Helper <helper@example.test>','to':'shop@example.test','subject':'Google Ads','text':'lozinka: do-not-store\n4111 1111 1111 1111','raw':'Message-ID: <one@example.test>\n\n'}
+            identity=mail_bridge.capture(data,directory)
+            self.assertEqual(mail_bridge.capture(data,directory),identity)
+            content=(config/'incoming'/(identity+'.json')).read_text()
+            self.assertNotIn('do-not-store',content);self.assertNotIn('4111',content)
+            self.assertIsNone(mail_bridge.capture(dict(data,**{'from':'stranger@example.test'}),directory))
+            self.assertIsNone(mail_bridge.capture(dict(data,raw='Auto-Submitted: auto-replied\n\n'),directory))
+            self.assertEqual(len(list((config/'incoming').glob('*.json'))),1)
+
+    def test_mail_reply_controller_copies_owner_routes_decisions_and_does_not_repeat(self):
+        import correspondence
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);incoming=root/'incoming';incoming.mkdir()
+            config={'enabled':True,'correspondent':'helper@example.test','owner':'owner@example.test'}
+            identity='a'*64
+            message={'id':identity,'from':config['correspondent'],'subject':'Google Ads','text':'Question','received_at':store.now()}
+            (incoming/(identity+'.json')).write_text(json.dumps(message))
+            draft={'reply_needed':True,'subject':'Re: Google Ads','body':'Odgovor','needs_owner':True,'summary':'Budget question'}
+            with patch.object(correspondence,'ROOT',root),patch.object(correspondence,'settings',return_value=config),patch.object(correspondence,'draft',return_value=draft),patch.object(correspondence,'send',return_value='provider-id') as send:
+                self.assertEqual(correspondence.run_once(),1)
+                self.assertEqual(send.call_args.args[0]['to'],[config['owner']])
+                self.assertEqual(correspondence.run_once(),0);send.assert_called_once()
+                identity='b'*64;message.update(id=identity,dry_run=True)
+                (incoming/(identity+'.json')).write_text(json.dumps(message));draft['needs_owner']=False
+                self.assertEqual(correspondence.run_once(),1)
+                result=json.loads((root/'outgoing'/(identity+'.json')).read_text())
+                self.assertEqual(result['status'],'dry_run')
+                self.assertEqual(result['payload']['to'],[config['correspondent'],config['owner']])
+                send.assert_called_once()
+
     def test_inventory_specifications_require_admin_and_csrf(self):
         import specifications
         self.assertEqual(self.client.post('/admin/specifications',json={'model':'T14'}).status_code,403)

@@ -34,6 +34,13 @@ def export():
     from app import app
     from flask import render_template
     cfg = store.settings()
+    endpoint = store.STATE / 'backend.json'
+    analytics_origin = None
+    try:
+        candidate = urlparse(json.loads(endpoint.read_text()).get('backend') or '')
+        if candidate.scheme == 'https' and candidate.hostname and candidate.hostname.endswith('.trycloudflare.com') and not candidate.username and not candidate.password and candidate.port is None:
+            analytics_origin = candidate.scheme+'://'+candidate.hostname
+    except (OSError, ValueError, TypeError):pass
     temp = store.ROOT / '.public-build'
     if temp.exists():
         shutil.rmtree(temp)
@@ -53,7 +60,7 @@ def export():
         out = temp / path.strip('/') / 'index.html'
         out.parent.mkdir(parents=True, exist_ok=True)
         with app.test_request_context(path):
-            html = render_template(template, base=base, live=False, current_path=path, **context)
+            html = render_template(template, base=base, live=False, current_path=path, analytics_origin=analytics_origin, **context)
         out.write_text(html)
         if not context.get('private_page'):
             urls.append(path)
@@ -79,7 +86,6 @@ def export():
         page(path,'frame.html',frame_kind=kind,page_title=title,private_page=True)
     page('/korpa/','cart.html',page_title='Vaša korpa',private_page=True)
     (temp / 'catalog.json').write_text(json.dumps(public_catalog(cfg), ensure_ascii=False, separators=(',',':')))
-    endpoint = store.STATE / 'backend.json'
     (temp / 'backend.json').write_text(endpoint.read_text() if endpoint.exists() else '{"backend":null}')
     (temp / '.nojekyll').touch()
     if urlparse(cfg['site_url']).hostname in ('reklik.shop','www.reklik.shop'):
@@ -122,7 +128,7 @@ def publish(push=True):
         if not (store.ROOT / '.git').exists():
             return {'pages': count, 'pushed': False}
         git('add','--','docs','assets','templates','app.py','store.py','payments.py','publisher.py',
-            'ai_editor.py','editor_guard.mjs','specifications.py','specs_guard.mjs','addresses.py','runtime.py','domain.py','notifications.py','rates.py','inventory_rules.py','setup.py','requirements.txt','.gitignore','README.md','tests')
+            'analytics.py','mail_bridge.py','correspondence.py','ai_editor.py','editor_guard.mjs','specifications.py','specs_guard.mjs','addresses.py','runtime.py','domain.py','notifications.py','rates.py','inventory_rules.py','setup.py','requirements.txt','.gitignore','README.md','tests')
         changed = git('diff','--cached','--quiet',check=False).returncode != 0
         if changed:
             git('commit','-m','Update ReKlik storefront and catalog')

@@ -28,6 +28,6 @@
  <p class="condition-tag">{{p.condition}}</p>
  <p class="product-specs">{{ p.specs.values()|list|truncate_specs }}</p>
  <div class="product-bottom"><strong>{{money(p.price_cents)}}</strong><span class="stock {{'sold' if p.quantity < 1 else ''}}">{{'Na stanju' if p.quantity > 0 else 'Prodato'}}</span></div>
- {% if current_path == '/' %}<a class="button button-pink button-full" href="{{base}}/proizvod/{{p.id}}/">Više informacija {{icon('arrow',17)}}</a>{% else %}<a class="button button-dark button-full" href="{{base}}/checkout/?buy={{p.id}}" {% if p.quantity < 1 %}aria-disabled="true" tabindex="-1"{% endif %}>Kupi sada {{icon('arrow',17)}}</a>{% endif %}</div>
+ {% if current_path == '/' %}<a class="button button-pink button-full" href="{{base}}/proizvod/{{p.id}}/">Više informacija {{icon('arrow',17)}}</a>{% else %}<a class="button button-dark button-full" href="{{analytics_origin ~ '/analytics/buy/' ~ p.id if analytics_origin is not none else base ~ '/checkout/?buy=' ~ p.id}}" {% if p.quantity < 1 %}aria-disabled="true" tabindex="-1"{% endif %}>Kupi sada {{icon('arrow',17)}}</a>{% endif %}</div>
 </article>
 {%- endmacro %}

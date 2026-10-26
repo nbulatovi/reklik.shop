@@ -25,7 +25,7 @@ from werkzeug.security import generate_password_hash
 import store,rates
 from datetime import datetime
 from zoneinfo import ZoneInfo
-store.set_settings({'eur_rsd':'117.2','eur_rsd_date':datetime.now(ZoneInfo('Europe/Belgrade')).date().isoformat(),'eur_rsd_source':rates.SOURCE})
+store.set_settings({'site_url':'http://127.0.0.1:4341','eur_rsd':'117.2','eur_rsd_date':datetime.now(ZoneInfo('Europe/Belgrade')).date().isoformat(),'eur_rsd_source':rates.SOURCE})
 store.init_db()
 (store.STATE/'private.json').write_text(json.dumps({'secret':'browser-test-secret','password_hash':generate_password_hash('browser-test-password')}))
 Image.new('RGB',(1200,900),(218,220,223)).save(store.STATE/'camera.jpg')

@@ -225,3 +225,11 @@ body p{font-size:16px!important;line-height:1.7}body small{font-size:14px!import
 @media(max-width:350px){.item-page .device-buy-actions{padding-left:10px;padding-right:10px;column-gap:8px}}
 @media print{.item-page .device-buy-actions{display:none}.item-page{padding-bottom:0}}
 .item-page .device-delivery{grid-row:2}
+.item-analytics{margin-top:28px;padding-top:24px;border-top:1px solid var(--line,#e8dfd6);scroll-margin-top:20px}
+.item-analytics>p{margin:12px 0;line-height:1.55}
+.analytics-metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:18px 0}
+.analytics-metrics>div{padding:12px;background:#fff6ed;border:1px solid #f3dfca;border-radius:12px;min-width:0}
+.analytics-metrics dt{font-size:16px;line-height:1.4;overflow-wrap:anywhere}
+.analytics-metrics dd{margin:6px 0 0;font-size:28px;line-height:1.2;font-weight:750}
+.analytics-errors>div{display:flex;justify-content:space-between;gap:16px;padding:8px 0;border-bottom:1px solid #eee}
+.analytics-errors dt{overflow-wrap:anywhere}.analytics-errors dd{font-weight:700;margin:0}

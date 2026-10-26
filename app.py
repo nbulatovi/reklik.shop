@@ -2,7 +2,6 @@ import csv
 import hashlib
 import hmac
 import io
-import ipaddress
 import json
 import os
 import re
@@ -12,7 +11,7 @@ import time
 from collections import defaultdict
 from functools import wraps
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlencode
 
 import pycountry
 from flask import Flask, Response, abort, g, jsonify, make_response, redirect, render_template, request, send_from_directory, url_for
@@ -23,6 +22,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 import store
 import payments
 import inventory_rules
+import analytics
 
 app = Flask(__name__, static_folder='assets', static_url_path='/assets')
 app.json.sort_keys = False
@@ -53,6 +53,7 @@ app.jinja_env.filters['full_image_urls'] = lambda values, origin: [origin+'/medi
 app.jinja_env.filters['asset_urls'] = lambda values, origin: [origin + '/assets/' + x for x in values]
 app.jinja_env.filters['converted_price'] = lambda cents, cfg: f'{cents / 100:.2f}'
 app.jinja_env.filters['order_money'] = store.display_money
+app.jinja_env.filters['timestamp_date'] = lambda value: time.strftime('%d.%m.%Y. %H:%M',time.localtime(int(value)))
 
 
 def queue_publish():
@@ -63,7 +64,7 @@ def queue_publish():
 @app.before_request
 def load_session():
     g.session = None
-    if request.path.startswith(('/assets/', '/media/', '/health', '/webhooks/', '/views/')):
+    if request.path.startswith(('/assets/', '/media/', '/health', '/webhooks/', '/views/', '/analytics/')):
         return
     sid = request.cookies.get('rk_session', '')
     with store.connect(True) as c:
@@ -75,11 +76,19 @@ def load_session():
             row = c.execute('SELECT * FROM sessions WHERE id=?', (sid,)).fetchone()
         g.session = dict(row)
     if request.method == 'POST':
+        if request.path == '/checkout/':
+            try: identities = item_visitors(decode_cart())
+            except (ValueError,KeyError,TypeError): identities = {}
+            g.checkout_visitors = identities
+            analytics.record(identities, 'checkout_attempt')
+            analytics.record(identities, checkout_method()+'_attempt')
         token = request.form.get('csrf') or request.headers.get('X-CSRF-Token', '')
         if not token or not hmac.compare_digest(g.session['csrf'], token):
+            checkout_failure('session')
             abort(403, 'Sesija je istekla. Osvežite stranicu i pokušajte ponovo.')
         origin = request.headers.get('Origin')
         if origin and origin != request.host_url.rstrip('/'):
+            checkout_failure('security')
             abort(403, 'Neispravan izvor zahteva.')
 
 
@@ -88,8 +97,8 @@ def response_headers(response):
     response.headers['X-Content-Type-Options'] = 'nosniff'
     response.headers['Referrer-Policy'] = 'same-origin'
     response.headers['Permissions-Policy'] = 'camera=(self), microphone=(), geolocation=()'
-    response.headers['Content-Security-Policy'] = "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-src https://whop.com https://*.whop.com; frame-ancestors 'self' https://nbulatovi.github.io https://reklik.shop https://www.reklik.shop; object-src 'none'; base-uri 'self'; form-action 'self' https://whop.com https://nbulatovi.github.io https://reklik.shop https://www.reklik.shop"
-    if request.path.startswith(('/admin', '/checkout', '/order', '/api/', '/views/')):
+    response.headers['Content-Security-Policy'] = "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-src 'self' https://whop.com https://*.whop.com; frame-ancestors 'self' https://nbulatovi.github.io https://reklik.shop https://www.reklik.shop; object-src 'none'; base-uri 'self'; form-action 'self' https://whop.com https://nbulatovi.github.io https://reklik.shop https://www.reklik.shop"
+    if request.path.startswith(('/admin', '/checkout', '/order', '/api/', '/views/', '/analytics/')):
         response.headers['Cache-Control'] = 'no-store'
         response.headers['X-Robots-Tag'] = 'noindex, nofollow'
     if getattr(g, 'session', None):
@@ -111,7 +120,7 @@ def admin_only(fn):
 @app.context_processor
 def template_context():
     cfg = store.settings()
-    return {'cfg': cfg, 'categories': store.categories(), 'base': '', 'live': True,
+    return {'cfg': cfg, 'categories': store.categories(), 'base': '', 'live': True, 'analytics_origin':'',
             'asset_version': str(max((store.ROOT/'assets/style.css').stat().st_mtime_ns,(store.ROOT/'assets/site.js').stat().st_mtime_ns)),
             'csrf': g.session['csrf'] if getattr(g, 'session', None) else '', 'condition_grades':inventory_rules.GRADES,
             'money': lambda cents: store.display_money(cents,'EUR'),
@@ -185,23 +194,44 @@ def legacy_product(slug):
 
 @app.route('/views/product/<int:pid>')
 def count_item_view(pid):
-    # Called only when an item detail page opens; no cookie or raw-IP record.
-    p = store.product(pid)
-    if not p:
-        return '',404
-    if re.search(r'bot|spider|crawler|preview',request.headers.get('User-Agent',''),re.I):
-        return '',204
-    raw_ip = request.headers.get('CF-Connecting-IPv6') or request.headers.get('CF-Connecting-IP') or request.remote_addr
-    try:
-        address = ipaddress.ip_address(raw_ip)
-        if isinstance(address,ipaddress.IPv6Address) and address.ipv4_mapped:
-            address = address.ipv4_mapped
-    except ValueError:
-        return '',204
-    visitor = hmac.new(PRIVATE['secret'].encode(),('item-view:'+str(pid)+':'+str(address)).encode(),hashlib.sha256).hexdigest()
-    with store.connect(True) as c:
-        c.execute('INSERT OR IGNORE INTO item_views(product_id,visitor_hash,first_seen) VALUES(?,?,?)',(pid,visitor,store.now()))
+    # Compatibility for previously cached storefront JavaScript.
+    if not store.product(pid):return '',404
+    analytics.record(item_visitors([{'id':pid}]),'view')
     return '',204
+
+
+def item_visitors(items):
+    return analytics.visitors(items,request,PRIVATE['secret'],bool(getattr(g,'session',None) and g.session['admin']))
+
+
+def checkout_method():
+    method=request.form.get('payment_method','cod')
+    return method if method in ('cod','card','pickup') else 'checkout'
+
+
+def checkout_failure(reason):
+    if request.path=='/checkout/' and request.method=='POST':
+        analytics.record(getattr(g,'checkout_visitors',{}),checkout_method()+'_failed',reason)
+
+
+@app.route('/analytics/view/<int:pid>.gif')
+def item_view_pixel(pid):
+    if not store.product(pid):abort(404)
+    analytics.record(item_visitors([{'id':pid}]),'view')
+    response=Response(bytes.fromhex('47494638396101000100800000000000ffffff21f90401000000002c00000000010001000002024401003b'),mimetype='image/gif')
+    response.headers['Access-Control-Allow-Origin']='*'
+    return response
+
+
+@app.route('/analytics/<action>/<int:pid>')
+def item_action(action,pid):
+    if action not in ('buy','cart') or not store.product(pid):abort(404)
+    analytics.record(item_visitors([{'id':pid}]),'buy_now' if action=='buy' else 'cart_click')
+    if action=='cart':return '',204
+    try:warranty=int(request.args.get('warranty',0))
+    except ValueError:warranty=0
+    query=urlencode({'buy':pid,'warranty':warranty if warranty in (0,1,2,3) else 0})
+    return redirect(store.settings()['site_url'].rstrip('/')+'/checkout/?'+query,code=302)
 
 
 @app.route('/<page>/')
@@ -242,6 +272,7 @@ def checkout():
     values = request.form.to_dict() if request.method == 'POST' else {}
     try:
         raw = decode_cart()
+        if request.method=='GET':analytics.record(item_visitors(raw),'checkout_open')
         if request.method == 'POST':
             prior_idem = values.get('idem','')
             signature = hmac.new(PRIVATE['secret'].encode(),(g.session['id']+prior_idem).encode(),hashlib.sha256).hexdigest()
@@ -291,9 +322,10 @@ def checkout():
             signature = values.get('idem_signature', '')
             expected = hmac.new(PRIVATE['secret'].encode(), (g.session['id'] + idem).encode(), hashlib.sha256).hexdigest()
             if not hmac.compare_digest(expected, signature):
+                checkout_failure('security')
                 abort(403)
             order = store.create_order(raw, customer, delivery, values.get('payment_method', 'cod'), idem,
-                                       expected=(q['currency'],q['total_minor']))
+                                       expected=(q['currency'],q['total_minor']),visitors=getattr(g,'checkout_visitors',{}))
             import notifications
             notifications.WAKE.set()
             queue_publish()
@@ -302,6 +334,7 @@ def checkout():
                     purchase_url = payments.create_checkout(order, request.host_url)
                     return redirect(purchase_url, code=303)
                 except ValueError as e:
+                    analytics.record(getattr(g,'checkout_visitors',{}),'card_failed','processor')
                     store.audit('checkout_failed', order['id'], str(e))
                     return redirect(store.settings()['site_url'] + '/potvrda/?order=' + order['token'], code=303)
             elif order['payment_method'] == 'card' and order.get('checkout_url'):
@@ -310,6 +343,8 @@ def checkout():
             return redirect('/order/' + order['token'] + '/')
     except (ValueError, KeyError, TypeError, json.JSONDecodeError) as e:
         error = str(e) if isinstance(e, ValueError) else 'Porudžbina nije ispravna. Pokušajte ponovo.'
+        if request.method=='POST':checkout_failure(analytics.failure_reason(error))
+        else:analytics.record(item_visitors(raw),'checkout_failed',analytics.failure_reason(error))
     idem = values.get('idem') or secrets.token_hex(32)
     signature = hmac.new(PRIVATE['secret'].encode(), (g.session['id'] + idem).encode(), hashlib.sha256).hexdigest()
     return render_template('checkout.html', quote=q, items=raw, error=error, values=values, countries=countries,
@@ -466,6 +501,7 @@ def admin_dashboard():
         orders = [store.unpack(r) for r in c.execute("SELECT o.*, (SELECT status FROM order_notifications n WHERE n.order_id=o.id AND n.event='new_order') email_status, (SELECT recipient FROM order_notifications n WHERE n.order_id=o.id AND n.event='new_order') email_recipient FROM orders o ORDER BY o.created_at DESC LIMIT 100")]
         jobs = [dict(r) for r in c.execute("SELECT * FROM jobs WHERE kind!='specifications' ORDER BY created_at DESC LIMIT 5")]
     return render_template('admin.html', products=store.products(admin=True), selected=selected, orders=orders,
+                           item_analytics=analytics.summary(selected['id']) if selected and selected['id'] else None,
                            jobs=jobs, tab=tab, message=request.args.get('message', ''), error=request.args.get('error', ''),
                            page_title='ReKlik administracija', private_page=True)
 
