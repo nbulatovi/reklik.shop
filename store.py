@@ -121,6 +121,11 @@ def init_db():
           order_id TEXT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
           product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,visitor_hash TEXT NOT NULL,
           PRIMARY KEY(order_id,product_id,visitor_hash));
+        CREATE TABLE IF NOT EXISTS qr_scans(
+          campaign TEXT NOT NULL CHECK(campaign IN ('a6-a','a6-b')),
+          visitor_hash TEXT NOT NULL,first_seen INTEGER NOT NULL,last_seen INTEGER NOT NULL,
+          hits INTEGER NOT NULL DEFAULT 1,
+          PRIMARY KEY(campaign,visitor_hash));
         CREATE TABLE IF NOT EXISTS model_specs(
           cache_key TEXT PRIMARY KEY,result TEXT,updated_at INTEGER NOT NULL,job_id TEXT);
         CREATE TABLE IF NOT EXISTS product_ai(

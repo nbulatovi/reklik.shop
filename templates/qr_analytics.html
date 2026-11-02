@@ -1,0 +1,11 @@
+<section id="qr-analytics" class="panel" style="margin-top:25px" aria-labelledby="qr-analytics-title">
+<h2 id="qr-analytics-title">QR kampanje — A6 leci</h2>
+<p>Otvaranja QR linka, bez analitičkog JavaScript koda i kolačića. Ovo nisu potvrđene kupovine.</p>
+{% for campaign in qr_analytics %}<article{% if not loop.first %} style="margin-top:25px"{% endif %}>
+<h3>{{campaign.label}}</h3>
+<p style="overflow-wrap:anywhere"><a href="{{campaign.url}}" target="_blank" rel="noopener noreferrer">{{campaign.url}}</a></p>
+<dl class="analytics-metrics"><div><dt>Ukupno otvaranja linka</dt><dd data-qr-total="{{campaign.code}}">{{campaign.total_scans}}</dd></div><div><dt>Jedinstvene IP adrese</dt><dd data-qr-unique="{{campaign.code}}">{{campaign.unique_ips}}</dd></div></dl>
+{% if campaign.last_seen %}<p class="settings-note">Poslednje otvaranje: {{campaign.last_seen|timestamp_date}}</p>{% endif %}
+</article>{% endfor %}
+<p class="settings-note">Ponovljeno otvaranje povećava ukupan broj, dok se ista IP adresa u okviru jednog letka računa jednom. Zajednička mreža može predstavljati više ljudi, a promena IP adrese istu osobu može brojati više puta. Poznati roboti, predučitavanja i prepoznate administratorske sesije se preskaču. Prosleđen link i pregled QR aplikacije mogu biti uključeni. Brojači ne povezuju skeniranje sa porudžbinom.</p>
+</section>

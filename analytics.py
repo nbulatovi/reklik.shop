@@ -13,21 +13,34 @@ REASONS={
  'session':'Istekla ili blokirana sesija','security':'Provera bezbednosti nije prošla','stock':'Uređaj više nije dostupan',
  'shipping':'Dostava nije dostupna','processor':'Platni servis nije otvorio naplatu','form':'Druga greška u podacima',
 }
+QR_CAMPAIGNS={
+ 'a6-a':{'label':'A6 letak A','url':'https://reklik.gcchelp.com/r/a6-a','destination':'https://reklik.shop/?src=a6-a'},
+ 'a6-b':{'label':'A6 letak B','url':'https://reklik.gcchelp.com/r/a6-b','destination':'https://reklik.shop/?src=a6-b'},
+}
 
 
 def actor(address,secret,pid):
+    return scoped_actor(address,secret,'item-view:'+str(pid))
+
+
+def scoped_actor(address,secret,scope):
     try:
         ip=ipaddress.ip_address(str(address))
         if isinstance(ip,ipaddress.IPv6Address) and ip.ipv4_mapped:ip=ip.ipv4_mapped
     except ValueError:return None
-    return hmac.new(secret.encode(),('item-view:'+str(pid)+':'+str(ip)).encode(),hashlib.sha256).hexdigest()
+    return hmac.new(secret.encode(),(scope+':'+str(ip)).encode(),hashlib.sha256).hexdigest()
+
+
+def visitor_address(request,admin=False):
+    if admin or re.search(r'bot|spider|crawler|preview',request.headers.get('User-Agent',''),re.I):return None
+    if 'prefetch' in (request.headers.get('Purpose','')+' '+request.headers.get('Sec-Purpose','')).lower():return None
+    if request.form.get('website'):return None
+    return request.headers.get('CF-Connecting-IPv6') or request.headers.get('CF-Connecting-IP') or request.remote_addr
 
 
 def visitors(items,request,secret,admin=False):
-    if admin or re.search(r'bot|spider|crawler|preview',request.headers.get('User-Agent',''),re.I):return {}
-    if 'prefetch' in (request.headers.get('Purpose','')+' '+request.headers.get('Sec-Purpose','')).lower():return {}
-    if request.form.get('website'):return {}
-    ip=request.headers.get('CF-Connecting-IPv6') or request.headers.get('CF-Connecting-IP') or request.remote_addr
+    ip=visitor_address(request,admin)
+    if not ip:return {}
     identities={}
     for item in items[:30]:
         try:pid=int(item['id'])
@@ -36,6 +49,28 @@ def visitors(items,request,secret,admin=False):
         identity=actor(ip,secret,pid)
         if identity:identities[pid]=identity
     return identities
+
+
+def record_qr(campaign,request,secret,admin=False):
+    if campaign not in QR_CAMPAIGNS or request.method!='GET':return
+    address=visitor_address(request,admin)
+    if not address:return
+    identity=scoped_actor(address,secret,'qr-scan:'+campaign)
+    if not identity:return
+    moment=store.now()
+    with store.connect(True) as c:
+        c.execute('''INSERT INTO qr_scans(campaign,visitor_hash,first_seen,last_seen,hits)
+          VALUES(?,?,?,?,1) ON CONFLICT(campaign,visitor_hash)
+          DO UPDATE SET last_seen=excluded.last_seen,hits=hits+1''',(campaign,identity,moment,moment))
+
+
+def qr_summary():
+    with store.connect() as c:
+        counts={r['campaign']:dict(r) for r in c.execute('''SELECT campaign,count(*) unique_ips,
+          COALESCE(sum(hits),0) total_scans,min(first_seen) first_seen,max(last_seen) last_seen
+          FROM qr_scans GROUP BY campaign''')}
+    return [dict(info,code=code,**counts.get(code,{'unique_ips':0,'total_scans':0,'first_seen':None,'last_seen':None}))
+            for code,info in QR_CAMPAIGNS.items()]
 
 
 def write(c,identities,stage,reason=''):

@@ -6,6 +6,7 @@ import json
 import os
 import re
 import secrets
+import sqlite3
 import threading
 import time
 from collections import defaultdict
@@ -64,7 +65,7 @@ def queue_publish():
 @app.before_request
 def load_session():
     g.session = None
-    if request.path.startswith(('/assets/', '/media/', '/health', '/webhooks/', '/views/', '/analytics/')):
+    if request.path.startswith(('/assets/', '/media/', '/health', '/webhooks/', '/views/', '/analytics/', '/r/')):
         return
     sid = request.cookies.get('rk_session', '')
     with store.connect(True) as c:
@@ -98,7 +99,7 @@ def response_headers(response):
     response.headers['Referrer-Policy'] = 'same-origin'
     response.headers['Permissions-Policy'] = 'camera=(self), microphone=(), geolocation=()'
     response.headers['Content-Security-Policy'] = "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-src 'self' https://whop.com https://*.whop.com; frame-ancestors 'self' https://nbulatovi.github.io https://reklik.shop https://www.reklik.shop; object-src 'none'; base-uri 'self'; form-action 'self' https://whop.com https://nbulatovi.github.io https://reklik.shop https://www.reklik.shop"
-    if request.path.startswith(('/admin', '/checkout', '/order', '/api/', '/views/', '/analytics/')):
+    if request.path.startswith(('/admin', '/checkout', '/order', '/api/', '/views/', '/analytics/', '/r/')):
         response.headers['Cache-Control'] = 'no-store'
         response.headers['X-Robots-Tag'] = 'noindex, nofollow'
     if getattr(g, 'session', None):
@@ -232,6 +233,23 @@ def item_action(action,pid):
     except ValueError:warranty=0
     query=urlencode({'buy':pid,'warranty':warranty if warranty in (0,1,2,3) else 0})
     return redirect(store.settings()['site_url'].rstrip('/')+'/checkout/?'+query,code=302)
+
+
+@app.route('/r/<campaign>')
+def qr_scan(campaign):
+    info=analytics.QR_CAMPAIGNS.get(campaign)
+    if not info:abort(404)
+    # Read an existing admin session only; scan requests never create or renew a
+    # cookie. The redirect destination is fixed, regardless of query parameters.
+    sid=request.cookies.get('rk_session','')
+    try:
+        with store.connect() as c:
+            admin=bool(sid and c.execute('SELECT 1 FROM sessions WHERE id=? AND admin=1 AND expires_at>?',
+                                        (sid,store.now())).fetchone())
+        analytics.record_qr(campaign,request,PRIVATE['secret'],admin)
+    except sqlite3.Error:
+        app.logger.warning('QR scan counter temporarily unavailable')
+    return redirect(info['destination'],code=302)
 
 
 @app.route('/<page>/')
@@ -502,6 +520,7 @@ def admin_dashboard():
         jobs = [dict(r) for r in c.execute("SELECT * FROM jobs WHERE kind!='specifications' ORDER BY created_at DESC LIMIT 5")]
     return render_template('admin.html', products=store.products(admin=True), selected=selected, orders=orders,
                            item_analytics=analytics.summary(selected['id']) if selected and selected['id'] else None,
+                           qr_analytics=analytics.qr_summary() if tab=='settings' else [],
                            jobs=jobs, tab=tab, message=request.args.get('message', ''), error=request.args.get('error', ''),
                            page_title='ReKlik administracija', private_page=True)
 
