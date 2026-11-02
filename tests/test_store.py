@@ -727,11 +727,15 @@ class StoreTests(unittest.TestCase):
         with store.connect() as c:self.assertEqual(c.execute('SELECT status FROM product_ai WHERE product_id=1').fetchone()[0],'cancelled')
         with patch.object(specifications,'start') as start:specifications.queue_product(1,['specs']);start.assert_not_called()
 
-    def test_seller_identity_is_only_on_card_checkout_not_other_store_pages(self):
-        for path in ('/','/garancija/','/uslovi/','/privatnost/','/kontakt/'):
+    def test_seller_identity_is_available_in_public_terms_and_card_checkout(self):
+        for path in ('/','/garancija/','/privatnost/','/kontakt/'):
             html=self.client.get(path).get_data(as_text=True)
             for phrase in ("Nikola's Electric",'William Flynn','Zakonska prava ostvarujete besplatno.'):
                 self.assertNotIn(phrase,html)
+        terms=self.client.get('/uslovi/').get_data(as_text=True)
+        for phrase in ("Nikola's Electric",'4960 William Flynn Hwy','Allison Park, PA 15101'):
+            self.assertIn(phrase,terms)
+        self.assertIn('href="/uslovi/"',self.client.get('/').get_data(as_text=True))
         cod=self.order();receipt=self.client.get('/order/'+cod['token']+'/receipt').get_data(as_text=True)
         self.assertNotIn("Nikola's Electric",receipt);self.assertIn('ReKlik.shop',receipt)
 
