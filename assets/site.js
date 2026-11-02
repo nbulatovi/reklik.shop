@@ -151,6 +151,8 @@
   const checkout = $('[data-checkout-form]');
   if (checkout) {
     let sequence = 0, pending = false;
+    const showCardSeller=()=>{const note=$('[data-card-seller]');if(note)note.hidden=$('input[name=payment_method]:checked',checkout)?.value!=='card';};
+    $$('input[name=payment_method]',checkout).forEach(el=>el.addEventListener('change',showCardSeller));showCardSeller();
     const refresh = async () => {
       const form = new FormData(checkout), pickup = form.get('delivery_method') === 'pickup', international = form.get('country') !== 'RS';
       $('[data-shipping-fields]').hidden = pickup;
@@ -162,6 +164,7 @@
       $('input',cod).disabled = international || pickup; $('input',storePay).disabled = !pickup;
       const selected = $('input[name=payment_method]:checked',checkout);
       if (!selected || selected.disabled) { const next = pickup ? $('input[value=pickup]',storePay) : international ? $('input[name=payment_method][value=card]',checkout) : $('input',cod); if (next) next.checked = true; }
+      showCardSeller();
       pending = true; const seq = ++sequence; $('[data-order-submit]').disabled = true;
       try {
         const res = await fetch('/api/quote', {method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':form.get('csrf')},body:JSON.stringify({items:JSON.parse(form.get('items')),country:form.get('country'),method:form.get('delivery_method'),courier:form.get('courier')})});
@@ -277,12 +280,9 @@
       listing.value=cents>0?money(Math.ceil(cents*105/50000)*500,'EUR'):'';
     };
     price.addEventListener('input',previewPrice);previewPrice();
-    const status=$('[data-spec-status]'),save=$('[data-inventory-save]');
-    inventory.elements.category_id.addEventListener('change',()=>{inventory.elements.auto_category_id.value='0';});
-    $('[data-fetch-specs]').addEventListener('click',()=>{
-      inventory.elements.lookup_requested.value='1';
-      inventory.requestSubmit(save);
-    });
+    const save=$('[data-inventory-save]'),aiToggle=$('[data-ai-specs-toggle]'),aiButton=$('[data-fetch-specs]');
+    const showAi=()=>{aiButton.hidden=!aiToggle.checked;};
+    aiToggle.addEventListener('change',showAi);showAi();
     inventory.addEventListener('submit',event=>{
       if(inventory.dataset.photosBusy){event.preventDefault();$('[data-photo-status]').textContent='Sačekajte pripremu fotografija pre čuvanja.';return;}
       if(event.defaultPrevented)return;

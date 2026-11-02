@@ -496,7 +496,7 @@ def admin_dashboard():
     if request.args.get('copy'):
         selected = store.product(request.args['copy'], admin=True)
         if selected:
-            selected = dict(selected, id='', slug='', quantity=1, active=1)
+            selected = dict(selected, id='', slug='', quantity=1, active=1, ai_specs_enabled=0)
     with store.connect() as c:
         orders = [store.unpack(r) for r in c.execute("SELECT o.*, (SELECT status FROM order_notifications n WHERE n.order_id=o.id AND n.event='new_order') email_status, (SELECT recipient FROM order_notifications n WHERE n.order_id=o.id AND n.event='new_order') email_recipient FROM orders o ORDER BY o.created_at DESC LIMIT 100")]
         jobs = [dict(r) for r in c.execute("SELECT * FROM jobs WHERE kind!='specifications' ORDER BY created_at DESC LIMIT 5")]
@@ -573,15 +573,16 @@ def save_product():
                 c.execute('''INSERT INTO products(id,category_id,title,brand,price_cents,quantity,condition,description,
                   specs,images,weight_kg,active,updated_at,created_at,slug) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
                   (pid,) + values + (store.now(), slug))
-            c.execute('UPDATE products SET base_price_cents=? WHERE id=?',(base_cents,pid))
+            ai_enabled=int(f.get('ai_specs_enabled')=='yes')
+            c.execute('UPDATE products SET base_price_cents=?,ai_specs_enabled=? WHERE id=?',(base_cents,ai_enabled,pid))
+            if not ai_enabled:
+                c.execute("UPDATE product_ai SET status='cancelled',retry_at=0,message='AI dopuna je isključena.',updated_at=? WHERE product_id=? AND status IN ('pending','failed')",(store.now(),pid))
         store.audit('product_saved', pid)
         import specifications
         identity_changed=not existing or existing['title']!=title or existing['brand']!=f.get('brand','').strip()[:80]
-        enrich=identity_changed or not specs or (existing and (specs!=existing['specs'] or desc!=existing['description'])) or f.get('lookup_requested')=='1'
+        enrich=ai_enabled and (identity_changed or not specs or (existing and (not existing['ai_specs_enabled'] or specs!=existing['specs'] or desc!=existing['description'])) or f.get('lookup_requested')=='1')
         if enrich:
-            fields=['specs']+([] if desc else ['description'])
-            if f.get('auto_category_id')=='1' and not existing:fields.append('category_id')
-            specifications.queue_product(pid,fields)
+            specifications.queue_product(pid,['specs'])
         queue_publish()
         return back_admin(message='Uređaj je sačuvan. AI u pozadini dodaje samo nedostajuće podatke; vaš unos ostaje sačuvan.' if enrich else 'Uređaj je sačuvan. Javne stranice se automatski objavljuju.')
     except (ValueError, KeyError, store.sqlite3.IntegrityError, ArithmeticError) as e:
@@ -592,8 +593,8 @@ def save_product():
 @admin_only
 def enrich_visible_inventory():
     import specifications
-    products=[p for p in store.products(admin=True) if p['active']]
-    for product in products:specifications.queue_product(product['id'],['specs','description'])
+    products=[p for p in store.products(admin=True) if p['active'] and p['ai_specs_enabled']]
+    for product in products:specifications.queue_product(product['id'],['specs'])
     store.audit('inventory_enrichment_requested',detail=str(len(products)))
     queue_publish()
     return back_admin(message='Dopuna nedostajućih specifikacija je pokrenuta za '+str(len(products))+' uređaja. Ručno uneti podaci imaju prednost.')
@@ -622,7 +623,7 @@ def duplicate_product(pid):
         if not row:abort(404)
         data=dict(row);new_id=store.next_product_id(c)
         data.update(id=new_id,slug=store.slugify(data['title'])+'-'+secrets.token_hex(3),quantity=1,
-                    active=int(bool(json.loads(data['images']) or data['catalog_image'])),revision=1,created_at=store.now(),updated_at=store.now())
+                    active=int(bool(json.loads(data['images']) or data['catalog_image'])),ai_specs_enabled=0,revision=1,created_at=store.now(),updated_at=store.now())
         c.execute('INSERT INTO products('+','.join(data)+') VALUES('+','.join('?' for _ in data)+')',tuple(data.values()))
     store.audit('product_duplicated',new_id,'source='+str(pid))
     queue_publish()

@@ -148,6 +148,8 @@ def init_db():
             c.execute('ALTER TABLE product_ai ADD COLUMN retry_at INTEGER NOT NULL DEFAULT 0')
             c.execute("UPDATE product_ai SET retry_at=? WHERE status='failed'",(now()+60,))
         product_columns = {row['name'] for row in c.execute('PRAGMA table_info(products)')}
+        if 'ai_specs_enabled' not in product_columns:
+            c.execute('ALTER TABLE products ADD COLUMN ai_specs_enabled INTEGER NOT NULL DEFAULT 0')
         if 'revision' not in product_columns:
             c.execute('ALTER TABLE products ADD COLUMN revision INTEGER NOT NULL DEFAULT 1')
         if 'base_price_cents' not in product_columns:

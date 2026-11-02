@@ -75,6 +75,9 @@ def finish_product(pid,data,job):
         task=c.execute("SELECT * FROM product_ai WHERE product_id=? AND status='pending' AND job_id IS ?",(pid,job)).fetchone()
         product=c.execute('SELECT * FROM products WHERE id=?',(pid,)).fetchone()
         if not task or not product:return
+        if not product['ai_specs_enabled']:
+            c.execute("UPDATE product_ai SET status='cancelled',retry_at=0,message='AI dopuna je isključena.',updated_at=? WHERE product_id=?",(store.now(),pid))
+            return
         baseline=json.loads(task['baseline']);fields=json.loads(task['fields'])
         if product['title']!=baseline['title'] or product['brand']!=baseline['brand']:
             c.execute("UPDATE product_ai SET status='cancelled',message='Model je promenjen.',updated_at=? WHERE product_id=?",(store.now(),pid))
@@ -118,6 +121,8 @@ def queue_product(pid,fields,retry=False):
     with store.connect() as c:
         previous=c.execute('SELECT * FROM product_ai WHERE product_id=?',(pid,)).fetchone()
     if retry and (not previous or previous['status']!='failed' or previous['retry_at']>store.now()):return
+    product=store.product(pid,admin=True)
+    if not product or not product['ai_specs_enabled']:return
     if 'specs' in fields:seed_owner_specs(pid)
     product=store.product(pid,admin=True)
     if not product:return
@@ -131,7 +136,7 @@ def queue_product(pid,fields,retry=False):
 
 def retry_failed():
     with store.connect() as c:
-        tasks=[dict(row) for row in c.execute("SELECT * FROM product_ai WHERE status='failed' AND attempts<3 AND retry_at>0 AND retry_at<=? ORDER BY retry_at LIMIT 2",(store.now(),))]
+        tasks=[dict(row) for row in c.execute("SELECT a.* FROM product_ai a JOIN products p ON p.id=a.product_id WHERE a.status='failed' AND a.attempts<3 AND a.retry_at>0 AND a.retry_at<=? AND p.ai_specs_enabled=1 ORDER BY a.retry_at LIMIT 2",(store.now(),))]
     for task in tasks:queue_product(task['product_id'],json.loads(task['fields']),retry=True)
 
 
@@ -151,6 +156,7 @@ def dispatch_product(pid,baseline):
 def recover():
     """Resume persisted inventory jobs after a service or PC restart."""
     with store.connect(True) as c:
+        c.execute("UPDATE product_ai SET status='cancelled',retry_at=0,message='AI dopuna je isključena.',updated_at=? WHERE status IN ('pending','failed') AND product_id IN (SELECT id FROM products WHERE ai_specs_enabled=0)",(store.now(),))
         c.execute("UPDATE jobs SET status='failed',output=?,finished_at=? WHERE kind='specifications' AND status IN ('queued','running')",
                   (json.dumps({'message':'Pretraga je prekinuta ponovnim pokretanjem servera.'}),store.now()))
         tasks=[dict(r) for r in c.execute("SELECT * FROM product_ai WHERE status='pending'")]

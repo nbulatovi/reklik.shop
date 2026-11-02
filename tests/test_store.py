@@ -544,6 +544,35 @@ class StoreTests(unittest.TestCase):
             self.assertIsNone(mail_bridge.capture(dict(data,raw='Auto-Submitted: auto-replied\n\n'),directory))
             self.assertEqual(len(list((config/'incoming').glob('*.json'))),1)
 
+    def test_authorized_emailed_ads_json_is_stored_privately_and_mime_is_decoded(self):
+        import mail_bridge
+        from email.message import EmailMessage
+        from cryptography.hazmat.primitives.asymmetric import rsa
+        from cryptography.hazmat.primitives import serialization
+        pem=rsa.generate_private_key(public_exponent=65537,key_size=2048).private_bytes(serialization.Encoding.PEM,serialization.PrivateFormat.PKCS8,serialization.NoEncryption()).decode()
+        key={'type':'service_account','project_id':'ads-test','client_email':'helper@ads-test.iam.gserviceaccount.com',
+             'private_key':pem,'private_key_id':'test-id','token_uri':'https://oauth2.googleapis.com/token'}
+        msg=EmailMessage();msg['From']='helper@example.test';msg['To']='shop@example.test';msg['Subject']='JSON ključ — ReKlik'
+        msg['Message-ID']='<ads-key@example.test>';msg.set_content('Šaljem već pripremljen ključ.',cte='quoted-printable')
+        msg.add_attachment(json.dumps(key).encode(),maintype='application',subtype='json',filename='account.json')
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)/'correspondence';root.mkdir()
+            config={'enabled':True,'correspondent':'helper@example.test','owner':'owner@example.test','mailbox':'shop@example.test',
+                    'allow_keys_by_email':True,'ads_setup':{'project_id':key['project_id'],'service_account':key['client_email']}}
+            (root/'settings.json').write_text(json.dumps(config))
+            data={'from':'helper@example.test','to':'shop@example.test','subject':'Encoded subject','raw':msg.as_string(),'text':'broken =C5=A0aljem'}
+            identity=mail_bridge.capture(data,directory)
+            received=json.loads((root/'incoming'/(identity+'.json')).read_text())
+            self.assertEqual(received['subject'],'JSON ključ — ReKlik')
+            self.assertEqual(received['text'].strip(),'Šaljem već pripremljen ključ.')
+            self.assertTrue(received['credentials_saved']);self.assertNotIn(pem,received['text'])
+            saved=root/'credentials/google-ads-service-account.json'
+            self.assertEqual(saved.stat().st_mode & 0o777,0o600)
+            self.assertEqual(json.loads(saved.read_text()),key)
+            self.assertEqual(mail_bridge.capture(data,directory),identity)
+            saved.unlink();config['allow_keys_by_email']=False;(root/'settings.json').write_text(json.dumps(config))
+            self.assertFalse(mail_bridge.save_ads_key(msg,config,root));self.assertFalse(saved.exists())
+
     def test_mail_reply_controller_copies_owner_routes_decisions_and_does_not_repeat(self):
         import correspondence
         with tempfile.TemporaryDirectory() as directory:
@@ -600,7 +629,7 @@ class StoreTests(unittest.TestCase):
     def test_inventory_saves_without_waiting_and_enriches_after_navigation(self):
         html=self.login()
         data={'csrf':self.hidden(html,'csrf'),'title':'Apple iPhone 13','brand':'Apple','price':'250',
-              'quantity':'2','category_id':'1','specs':'','description':'','auto_specs':'1','auto_description':'1','auto_category_id':'1'}
+              'quantity':'2','category_id':'1','specs':'','description':'','ai_specs_enabled':'yes'}
         response=self.client.post('/admin/product',data=data)
         self.assertEqual(response.status_code,302)
         with store.connect() as c:
@@ -613,11 +642,66 @@ class StoreTests(unittest.TestCase):
         result=self.ai_result();specifications.update(task['job_id'],'completed',{'result':result['result'],'message':result['message']})
         product=store.product(pid,admin=True)
         self.assertEqual(product['specs'],result['result']['specs'])
-        self.assertEqual(product['category_slug'],'telefoni')
+        self.assertEqual(product['category_slug'],'laptopovi')
+        self.assertEqual(product['description'],'')
         self.assertEqual(product['price_cents'],26500);self.assertEqual(product['base_price_cents'],25000);self.assertEqual(product['quantity'],2)
         self.assertEqual(self.client.get('/admin/inventory-status').json[0]['status'],'completed')
 
+    def test_inventory_ai_is_opt_in_and_manual_text_is_the_ad(self):
+        html=self.login()
+        data={'csrf':self.hidden(html,'csrf'),'title':'Ručni laptop','brand':'Lenovo','price':'100',
+              'quantity':'1','category_id':'1','specs':'RAM: 16 GB','description':'Moj ručni tekst oglasa.'}
+        with patch.object(specifications,'queue_product') as queue:
+            self.assertEqual(self.client.post('/admin/product',data=data).status_code,302)
+            queue.assert_not_called()
+        with store.connect() as c:pid=c.execute('SELECT max(id) FROM products').fetchone()[0]
+        product=store.product(pid,admin=True)
+        self.assertEqual(product['ai_specs_enabled'],0)
+        self.assertEqual(product['description'],'Moj ručni tekst oglasa.')
+        self.assertEqual(product['specs']['RAM'],'16 GB')
+        html=self.client.get('/admin/?edit='+str(pid)).get_data(as_text=True)
+        self.assertLess(html.index('id="category_id"'),html.index('data-native-camera'))
+        self.assertLess(html.index('id="description"'),html.index('data-ai-specs-toggle'))
+        self.assertEqual(html.count('name="category_id"'),1)
+        data.update(id=str(pid),revision=str(product['revision']),ai_specs_enabled='yes')
+        self.client.post('/admin/product',data=data)
+        with store.connect() as c:task=dict(c.execute('SELECT * FROM product_ai WHERE product_id=?',(pid,)).fetchone())
+        self.assertEqual(json.loads(task['fields']),['specs'])
+        specifications.finish_product(pid,self.ai_result(),task['job_id'])
+        product=store.product(pid,admin=True)
+        self.assertEqual(product['description'],'Moj ručni tekst oglasa.')
+        self.assertEqual(product['category_slug'],'laptopovi')
+        self.assertEqual(product['specs']['RAM'],'16 GB')
+        self.assertIn('Ekran',product['specs'])
+
+    def test_disabling_ai_cancels_pending_results_and_retries(self):
+        with store.connect(True) as c:c.execute('UPDATE products SET ai_specs_enabled=1 WHERE id=1')
+        specifications.queue_product(1,['specs'])
+        with store.connect() as c:
+            task=dict(c.execute('SELECT * FROM product_ai WHERE product_id=1').fetchone())
+        html=self.login();product=store.product(1,admin=True)
+        data={'csrf':self.hidden(html,'csrf'),'id':'1','revision':str(product['revision']),
+              'title':product['title'],'brand':product['brand'],'category_id':'1','quantity':'1','price':'285',
+              'specs':'RAM: 32 GB','description':'Novi ručni tekst.'}
+        self.client.post('/admin/product',data=data)
+        specifications.finish_product(1,self.ai_result(),task['job_id'])
+        specifications.retry_failed();specifications.recover()
+        product=store.product(1,admin=True)
+        self.assertEqual(product['ai_specs_enabled'],0);self.assertEqual(product['specs'],{'RAM':'32 GB'})
+        self.assertEqual(product['description'],'Novi ručni tekst.')
+        with store.connect() as c:self.assertEqual(c.execute('SELECT status FROM product_ai WHERE product_id=1').fetchone()[0],'cancelled')
+        with patch.object(specifications,'start') as start:specifications.queue_product(1,['specs']);start.assert_not_called()
+
+    def test_seller_identity_is_only_on_card_checkout_not_other_store_pages(self):
+        for path in ('/','/garancija/','/uslovi/','/privatnost/','/kontakt/'):
+            html=self.client.get(path).get_data(as_text=True)
+            for phrase in ("Nikola's Electric",'William Flynn','Zakonska prava ostvarujete besplatno.'):
+                self.assertNotIn(phrase,html)
+        cod=self.order();receipt=self.client.get('/order/'+cod['token']+'/receipt').get_data(as_text=True)
+        self.assertNotIn("Nikola's Electric",receipt);self.assertIn('ReKlik.shop',receipt)
+
     def test_background_ai_preserves_manual_edits_and_order_stock(self):
+        with store.connect(True) as c:c.execute('UPDATE products SET ai_specs_enabled=1 WHERE id=1')
         specifications.queue_product(1,['specs','description','category_id'])
         with store.connect(True) as c:
             job=c.execute('SELECT job_id FROM product_ai WHERE product_id=1').fetchone()[0]
@@ -628,6 +712,7 @@ class StoreTests(unittest.TestCase):
         self.assertEqual(product['price_cents'],41000);self.assertEqual(product['quantity'],0)
 
     def test_background_ai_does_not_overwrite_new_model_or_manual_fields(self):
+        with store.connect(True) as c:c.execute('UPDATE products SET ai_specs_enabled=1 WHERE id=1')
         specifications.queue_product(1,[])
         with store.connect() as c:job=c.execute('SELECT job_id FROM product_ai').fetchone()[0]
         specifications.finish_product(1,self.ai_result(),job)
@@ -641,6 +726,7 @@ class StoreTests(unittest.TestCase):
         with store.connect() as c:self.assertEqual(c.execute('SELECT status FROM product_ai').fetchone()[0],'cancelled')
 
     def test_background_ai_cached_completion_and_restart_recovery(self):
+        with store.connect(True) as c:c.execute('UPDATE products SET ai_specs_enabled=1 WHERE id=1')
         data=self.ai_result()
         with store.connect(True) as c:c.execute("UPDATE products SET description='' WHERE id=1")
         with patch.object(specifications,'start',return_value=data):specifications.queue_product(1,['description'])
@@ -773,6 +859,7 @@ class StoreTests(unittest.TestCase):
             self.assertEqual(json.loads((destination/'auth.json').read_text()),fresh)
 
     def test_owner_description_supplies_missing_facts_without_replacing_manual_specs(self):
+        with store.connect(True) as c:c.execute('UPDATE products SET ai_specs_enabled=1 WHERE id=1')
         description='CPU: I5 8Gen\nRAM: 8GB\nSSD: 256GB\nLicencirani windows 11 pro\nEkran 14 inca Full HD'
         specs=inventory_rules.description_specs(description)
         self.assertEqual(specs['Procesor'],'I5 8Gen');self.assertEqual(specs['RAM'],'8GB')
@@ -796,6 +883,7 @@ class StoreTests(unittest.TestCase):
         self.assertNotEqual(a['id'],b['id'])
 
     def test_failed_inventory_research_retries_automatically_with_current_manual_data(self):
+        with store.connect(True) as c:c.execute('UPDATE products SET ai_specs_enabled=1 WHERE id=1')
         specifications.queue_product(1,['specs'])
         with store.connect() as c:job=c.execute('SELECT job_id FROM product_ai WHERE product_id=1').fetchone()[0]
         specifications.update(job,'failed',{'message':'Temporary outage'})
@@ -816,6 +904,7 @@ class StoreTests(unittest.TestCase):
         with patch.object(specifications,'queue_product') as queue:specifications.retry_failed();queue.assert_not_called()
 
     def test_admin_bulk_specs_retry_is_private_and_keeps_hidden_inventory(self):
+        with store.connect(True) as c:c.execute('UPDATE products SET ai_specs_enabled=1 WHERE id=1')
         self.assertEqual(self.client.post('/admin/inventory/enrich').status_code,403)
         html=self.login();csrf=self.hidden(html,'csrf')
         with store.connect(True) as c:
@@ -823,7 +912,7 @@ class StoreTests(unittest.TestCase):
         with patch.object(specifications,'queue_product') as queue:
             result=self.client.post('/admin/inventory/enrich',data={'csrf':csrf})
         self.assertEqual(result.status_code,302)
-        queue.assert_called_once_with(1,['specs','description'])
+        queue.assert_called_once_with(1,['specs'])
         self.assertEqual(store.product(1)['specs'],{'Procesor':'Core i5','Memorija':'16 GB'})
 
     def test_catalog_showcase_round_robin_skips_empty_groups(self):

@@ -5,3 +5,4 @@ Pillow>=11,<12
 pillow-heif>=1,<2
 pycountry>=24,<25
 python-dotenv>=1,<2
+cryptography>=46,<47

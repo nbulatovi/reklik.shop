@@ -8,6 +8,33 @@ import time
 from email import policy
 from email.parser import Parser
 from email.utils import parseaddr
+from email.header import decode_header, make_header
+
+
+def save_ads_key(message,config,root):
+    """Accept only the specific service-account JSON authorized by the owner."""
+    if not config.get('allow_keys_by_email'):return False
+    expected=config.get('ads_setup',{})
+    for part in message.walk():
+        if part.is_multipart() or not str(part.get_filename() or '').lower().endswith('.json'):continue
+        try:
+            data=part.get_payload(decode=True)
+            if not data or len(data)>30000:continue
+            key=json.loads(data)
+            if key.get('type')!='service_account' or key.get('project_id')!=expected.get('project_id') or key.get('client_email')!=expected.get('service_account'):continue
+            from cryptography.hazmat.primitives.serialization import load_pem_private_key
+            from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
+            if not isinstance(load_pem_private_key(key['private_key'].encode(),password=None),RSAPrivateKey):continue
+            if key.get('token_uri')!='https://oauth2.googleapis.com/token':continue
+            folder=root/'credentials';folder.mkdir(parents=True,exist_ok=True,mode=0o700)
+            target=folder/'google-ads-service-account.json'
+            if target.exists():
+                return json.loads(target.read_text()).get('private_key_id')==key.get('private_key_id')
+            temporary=folder/'google-ads-service-account.tmp'
+            temporary.write_text(json.dumps(key));temporary.chmod(0o600);temporary.replace(target)
+            return True
+        except (ValueError,TypeError,KeyError,UnicodeError):continue
+    return False
 
 def settings(state=None):
     root=Path(state or os.environ.get('REKLIK_STATE',str(Path.home()/'.local/state/reklik')))/'correspondence'
@@ -38,22 +65,24 @@ def capture(data,state=None):
     if recipient!=config.get('mailbox','').lower():return None
     raw=Parser(policy=policy.default).parsestr(str(data.get('raw','')))
     if raw.get('Auto-Submitted','no').lower()!='no' or raw.get('Precedence','').lower() in ('bulk','list','junk'):return None
-    subject=str(data.get('subject') or raw.get('Subject') or '(bez naslova)')[:250]
+    subject=str(make_header(decode_header(str(raw.get('Subject') or data.get('subject') or '(bez naslova)'))))[:250]
     if sender==owner and not re.search(r'reklik|google.?ads',subject,re.I):return None
-    text=str(data.get('text',''))
-    if not text and raw:
+    text=''
+    if raw:
         part=raw.get_body(preferencelist=('plain',)) if raw.is_multipart() else raw
         if part and part.get_content_type()=='text/plain':
             try:text=part.get_content()
             except (LookupError,UnicodeError):pass
+    if not text:text=str(data.get('text',''))
     if not text:text=re.sub(r'<[^>]+>',' ',str(data.get('html','')))
     message_id=str(raw.get('Message-ID',''))
     identity=hashlib.sha256((sender+'|'+message_id+'|'+subject+'|'+text).encode()).hexdigest()
     root=Path(state or os.environ.get('REKLIK_STATE',str(Path.home()/'.local/state/reklik')))/'correspondence'
+    credentials_saved=save_ads_key(raw,config,root)
     incoming=root/'incoming';incoming.mkdir(parents=True,exist_ok=True,mode=0o700)
     target=incoming/(identity+'.json')
     if target.exists():return identity
     payload={'id':identity,'from':sender,'to':recipient,'subject':subject,'text':redact(text)[:18000],
-             'message_id':message_id,'received_at':int(time.time()),'dry_run':bool(data.get('reklik_dry_run'))}
+             'message_id':message_id,'received_at':int(time.time()),'dry_run':bool(data.get('reklik_dry_run')),'credentials_saved':credentials_saved}
     temporary=incoming/(identity+'.tmp');temporary.write_text(json.dumps(payload,ensure_ascii=False));temporary.chmod(0o600);temporary.replace(target)
     return identity
