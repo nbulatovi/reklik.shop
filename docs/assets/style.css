@@ -233,3 +233,9 @@ body p{font-size:16px!important;line-height:1.7}body small{font-size:14px!import
 .analytics-metrics dd{margin:6px 0 0;font-size:28px;line-height:1.2;font-weight:750}
 .analytics-errors>div{display:flex;justify-content:space-between;gap:16px;padding:8px 0;border-bottom:1px solid #eee}
 .analytics-errors dt{overflow-wrap:anywhere}.analytics-errors dd{font-weight:700;margin:0}
+
+.inventory-ai-choice{padding:16px;margin:16px 0;border:1px solid #f1d4b9;border-radius:12px;background:#fff8f1}
+.ai-specs-toggle{display:flex;align-items:flex-start;gap:12px;font-size:17px;font-weight:700;line-height:1.5;cursor:pointer}
+.ai-specs-toggle input{width:24px;height:24px;flex:0 0 24px;margin-top:2px;accent-color:#ed6a13}
+.inventory-ai-choice .button{white-space:normal;max-width:100%;margin-top:12px}
+.inventory-specifications{margin:18px 0}.inventory-specifications summary{cursor:pointer;font-size:17px;padding:10px 0}.inventory-specifications .field{margin-top:12px}
