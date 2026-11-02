@@ -4,7 +4,7 @@ The browser alone substitutes the test backend endpoint; public inventory is unt
 """
 import json
 from html import escape
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlsplit
 import os
 from pathlib import Path
 import subprocess
@@ -52,7 +52,7 @@ serve(app.app,host='127.0.0.1',port=4342)
             try:
                 if urlopen('http://127.0.0.1:4342/health',timeout=1).status==200:break
             except OSError:time.sleep(.1)
-        backend='https://reklik-qa.trycloudflare.com'
+        backend=os.environ.get('REKLIK_QA_BACKEND','https://reklik-qa.trycloudflare.com').rstrip('/')
         with sync_playwright() as p:
             # Keep the proxy's HTTP cookie jar separate from browser CHIPS cookies.
             proxy_client=p.request.new_context()
@@ -61,13 +61,14 @@ serve(app.app,host='127.0.0.1',port=4342)
                 address=os.environ['REKLIK_QA_GITHUB_IP']
                 browser_args.append('--host-resolver-rules=MAP reklik.shop '+address+',MAP www.reklik.shop '+address)
             browser=p.chromium.launch(executable_path='/usr/bin/google-chrome',headless=True,args=browser_args)
-            page=browser.new_page(viewport={'width':390,'height':844},is_mobile=True,has_touch=True)
+            desktop=os.environ.get('REKLIK_QA_DESKTOP')=='1'
+            page=browser.new_page(viewport={'width':1440,'height':1000} if desktop else {'width':390,'height':844},is_mobile=not desktop,has_touch=not desktop)
             page.set_default_timeout(10000)
             errors=[];page.on('pageerror',lambda error:errors.append(str(error)))
             def proxy(route):
                 request=route.request
                 headers=request.all_headers()
-                headers['host']='reklik-qa.trycloudflare.com'
+                headers['host']=urlsplit(backend).netloc
                 response=proxy_client.fetch('http://127.0.0.1:4342'+request.url.removeprefix(backend),method=request.method,headers=headers,data=request.post_data_buffer,max_redirects=0)
                 if response.status in (301,302,303,307,308):
                     # Playwright intercepts only the first URL of a redirect chain.
@@ -78,6 +79,8 @@ serve(app.app,host='127.0.0.1',port=4342)
                 else:route.fulfill(response=response)
             page.route(backend+'/**',proxy)
             page.route(PUBLIC+'/backend.json?*',lambda route:route.fulfill(json={'backend':backend}))
+            if os.environ.get('REKLIK_QA_LOCAL_JS')=='1':
+                page.route(PUBLIC+'/assets/site.js?*',lambda route:route.fulfill(path=str(ROOT/'assets/site.js'),content_type='application/javascript'))
             page.route('https://whop.com/checkout/ch_qa_stub/',lambda route:route.fulfill(body='<title>QA payment redirect</title><p>No payment occurs.</p>',content_type='text/html'))
             def fill(method):
                 page.goto(PUBLIC+'/checkout/?buy=1',wait_until='networkidle',timeout=60000)
@@ -121,9 +124,9 @@ serve(app.app,host='127.0.0.1',port=4342)
             frame.locator('[name=title]').fill('Latitude 5420')
             frame.locator('[name=price]').fill('249')
             page.wait_for_function('() => document.querySelector(".store-frame")!==null')
-            frame.locator('[name=specs]').fill('RAM: 16 GB\nSSD: 512 GB')
+            frame.locator('textarea[name=description]').fill('RAM: 16 GB\nSSD: 512 GB')
             assert frame.locator('[data-photo-preview] img').count()==2
-            assert 'RAM: 16 GB' in frame.locator('[name=specs]').input_value()
+            assert 'RAM: 16 GB' in frame.locator('textarea[name=description]').input_value()
             assert not errors,errors
             browser.close()
             print(json.dumps({'result':'passed','flows':['public storefront iframe with intercepted QA backend','partitioned session cookie','mobile Cyrillic village COD','outer confirmation URL','top-level card redirect (mock, no charge)','framed admin login, repeated camera inputs and manual-first specifications'],'javascript_errors':errors}))

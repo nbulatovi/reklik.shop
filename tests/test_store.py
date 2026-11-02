@@ -960,6 +960,17 @@ class StoreTests(unittest.TestCase):
         no_tablets=[r for r in rows if r['category_slug']!='tableti']
         self.assertEqual([r['id'] for r in store.showcase(no_tablets)],[2,0,3,5,1,6,7])
 
+    def test_backend_origin_accepts_only_expected_https_origins(self):
+        import publisher
+        for value in ('https://reklik.gcchelp.com','https://reklik.gcchelp.com/',
+                      'https://qa.trycloudflare.com'):
+            self.assertEqual(publisher.backend_origin(value),value.rstrip('/'))
+        for value in (None,'http://reklik.gcchelp.com','https://reklik.gcchelp.com.evil.test',
+                      'https://user@reklik.gcchelp.com','https://reklik.gcchelp.com:443',
+                      'https://reklik.gcchelp.com/other','https://reklik.gcchelp.com?next=evil',
+                      'https://reklik.gcchelp.com#fragment','https://evil.test'):
+            self.assertIsNone(publisher.backend_origin(value),value)
+
     def test_domain_does_not_cut_over_while_dns_points_to_parking(self):
         import domain,publisher
         before=store.settings()

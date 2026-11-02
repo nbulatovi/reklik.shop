@@ -3,6 +3,7 @@ import json
 from html import escape as html_escape
 import fcntl
 import os
+import re
 import shutil
 import subprocess
 import threading
@@ -17,6 +18,20 @@ LOCK = threading.Lock()
 SCHEDULE_LOCK = threading.Lock()
 scheduled = False
 generation = 0
+
+
+def backend_origin(value):
+    """Only publish links to the production backend or our legacy quick tunnel."""
+    try:
+        candidate = urlparse(value or '')
+        hostname = candidate.hostname or ''
+        allowed = hostname == 'reklik.gcchelp.com' or re.fullmatch(r'[a-z0-9-]+\.trycloudflare\.com', hostname)
+        if (candidate.scheme == 'https' and allowed and candidate.netloc == hostname
+                and candidate.path in ('', '/') and not candidate.query and not candidate.fragment):
+            return 'https://' + hostname
+    except (ValueError, TypeError):
+        pass
+    return None
 
 
 def public_catalog(cfg=None):
@@ -37,9 +52,7 @@ def export():
     endpoint = store.STATE / 'backend.json'
     analytics_origin = None
     try:
-        candidate = urlparse(json.loads(endpoint.read_text()).get('backend') or '')
-        if candidate.scheme == 'https' and candidate.hostname and candidate.hostname.endswith('.trycloudflare.com') and not candidate.username and not candidate.password and candidate.port is None:
-            analytics_origin = candidate.scheme+'://'+candidate.hostname
+        analytics_origin = backend_origin(json.loads(endpoint.read_text()).get('backend'))
     except (OSError, ValueError, TypeError):pass
     temp = store.ROOT / '.public-build'
     if temp.exists():

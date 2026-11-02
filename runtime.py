@@ -8,6 +8,7 @@ import subprocess
 import sys
 import threading
 import time
+from pathlib import Path
 import store
 
 
@@ -67,6 +68,13 @@ def tunnel():
     isolated_home.mkdir(exist_ok=True,mode=0o700)
     config = isolated_home / 'empty.yml'
     config.write_text('')
+    production_config = os.environ.get('REKLIK_TUNNEL_CONFIG')
+    if production_config:
+        config = Path(production_config).expanduser()
+        if not config.is_file():
+            raise RuntimeError('Production tunnel configuration is missing.')
+    command = ['/usr/bin/cloudflared','tunnel','--no-autoupdate','--config',str(config)]
+    command += ['run'] if production_config else ['--url','http://127.0.0.1:4340']
     child = None
     def stop(signum,frame):
         if child:
@@ -75,9 +83,11 @@ def tunnel():
     signal.signal(signal.SIGTERM,stop)
     signal.signal(signal.SIGINT,stop)
     while True:
-        child = subprocess.Popen(['/usr/bin/cloudflared','tunnel','--no-autoupdate','--config',str(config),'--url','http://127.0.0.1:4340'],
+        child = subprocess.Popen(command,
                                  env=dict(os.environ,HOME=str(isolated_home)),stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True)
         for line in child.stdout:
+            if production_config and 'Registered tunnel connection' in line:
+                print('ReKlik production HTTPS tunnel connected.',flush=True)
             match = re.search(r'https://[a-z0-9-]+\.trycloudflare\.com',line)
             if match:
                 endpoint = {'backend':match.group(0),'updated':store.now()}

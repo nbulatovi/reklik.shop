@@ -128,7 +128,8 @@
   if (frameHost) {
     fetch(base + '/backend.json?t=' + Date.now(), {cache: 'no-store'}).then(r => {if (!r.ok) throw Error(); return r.json();}).then(data => {
       const backend = new URL(data.backend);
-      if (backend.protocol !== 'https:' || !/^[a-z0-9-]+\.trycloudflare\.com$/.test(backend.hostname)) throw Error();
+      const allowedBackend = backend.origin === 'https://reklik.gcchelp.com' || /^[a-z0-9-]+\.trycloudflare\.com$/.test(backend.hostname);
+      if (backend.protocol !== 'https:' || !allowedBackend || backend.username || backend.password || backend.port || backend.pathname !== '/' || backend.search || backend.hash) throw Error();
       const kind = frameHost.dataset.frameKind, params = new URLSearchParams(location.search), target = new URL(backend.origin);
       if (kind === 'admin') { target.pathname = '/admin/'; ['tab','edit','copy'].forEach(k => {if (params.has(k)) target.searchParams.set(k,params.get(k));}); }
       else if (kind === 'confirmation') { const token = params.get('order') || ''; if (!/^[A-Za-z0-9_-]{30,90}$/.test(token)) throw Error(); target.pathname = '/order/' + token + '/'; target.searchParams.set('return','1'); }
