@@ -1,0 +1,49 @@
+ReKlik.shop — A6 letak / nalepnica — novembar 2026.
+
+VARIJANTE
+A: „Skoro novo. Skroz pametno.”
+   Podnaslov: „Zašto novo, kad ima i skoro novo?”
+B: „Zašto novo, kad ima i skoro novo?”
+   Podnaslov: „Testirani uređaji. Pametan izbor.”
+
+ŠTAMPA
+Datoteke *-bleed.pdf: medij 111 × 154 mm, TrimBox 105 × 148 mm,
+sa po 3 mm prepusta sa sve četiri strane. Jedna strana po PDF-u.
+Štampati u razmeri 100% (Actual size), bez opcije „Fit to page”.
+Seći po TrimBox-u, ne po spoljnim ivicama medija. Nema nacrtanih
+oznaka za sečenje u samom prepustu; štamparija ih može dodati pri montaži.
+
+Datoteke *-clean.pdf: tačno 105 × 148 mm, bez prepusta.
+Namenjene su pregledu i štampi gde prepust nije potreban.
+Datoteke *-preview-300dpi.png prikazuju čistu A6 površinu u 300 dpi.
+
+Tekst i QR su vektorski. Fontovi Ubuntu su ugrađeni i sadrže č, ć, š, ž, đ.
+Originalna generisana slika je ugrađena bez retuširanja i promene proporcija.
+PDF sadrži RGB boje; štamparija treba da uradi konverziju po profilu svoje
+mašine i izabranog papira. PDF nije deklarisan kao PDF/X.
+Za nalepnice proveriti sa štamparijom materijal, lepak i završnu obradu.
+
+QR
+A: https://reklik.gcchelp.com/r/a6-a
+B: https://reklik.gcchelp.com/r/a6-b
+QR je crn na beloj podlozi, 32 × 32 mm sa belom mirnom zonom od po
+četiri modula na svakoj strani. Dekodiranje je provereno iz gotovih
+PDF-ova renderovanih u 300 dpi. Putanje /r/a6-a i /r/a6-b razdvajaju
+posete različitih varijanti; sami skenovi ne dokazuju kupovinu.
+Pre većeg tiraža proveriti jedan fizički otisak na stvarnom papiru i
+otvoriti oba QR odredišta sa telefona.
+
+SADRŽAJ
+Kontakt: ReKlik.shop / +381 63 697 007.
+Kategorije: laptopovi i telefoni. Plaćanje: pouzećem bez doplate.
+Ilustracija nije fotografija konkretne raspoložive ponude. Izraz „skoro
+novo” je poruka kampanje; stanje i specifikacije proveravaju se uz svaki
+pojedinačni uređaj. Nisu dodate izmišljene cene, akcije ili garancije.
+
+PONOVNA IZRADA
+python -m venv .venv
+.venv/bin/pip install -r source/requirements.txt
+.venv/bin/python source/build_flyers.py
+
+Skripta prepoznaje original u device-art-original.png i ne menja ga.
+verification.json sadrži kontrolu dimenzija, teksta, fontova i dekodiranih QR.

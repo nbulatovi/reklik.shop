@@ -1,0 +1,489 @@
+{
+  "original_art_sha256": "173c75d091109a8f952ae8c54b7dff07c83afb95bcdfb7751c8283a12d9ae086",
+  "files": [
+    {
+      "image_width_mm": 78.75,
+      "image_height_mm": 52.5,
+      "image_effective_dpi": 495.4,
+      "qr_size_mm_including_quiet_zone": 32.0,
+      "qr_modules_including_quiet_zone": 37,
+      "qr_module_size_mm": 0.8649,
+      "qr_quiet_zone_modules_each_side": 4,
+      "file": "reklik-a6-a-bleed.pdf",
+      "media_mm": [
+        111.0,
+        154.0
+      ],
+      "trim_box_mm_from_top_left": [
+        3.0,
+        3.0,
+        108.0,
+        151.0
+      ],
+      "qr_decoded_from_exported_pdf_at_300dpi": "https://reklik.gcchelp.com/r/a6-a",
+      "text_and_serbian_diacritics_verified": true,
+      "native_text_safe_bounds_verified": true,
+      "fonts_embedded": true,
+      "text_spans": [
+        {
+          "text": "ReKlik.shop",
+          "font_pt": 15.699999809265137,
+          "bbox_pt": [
+            26.92913055419922,
+            31.259384155273438,
+            115.6341323852539,
+            46.95938491821289
+          ]
+        },
+        {
+          "text": "LAPTOPOVI I TELEFONI",
+          "font_pt": 7.800000190734863,
+          "bbox_pt": [
+            201.9945068359375,
+            35.370872497558594,
+            287.7165222167969,
+            43.17087173461914
+          ]
+        },
+        {
+          "text": "Skoro novo.",
+          "font_pt": 31.0,
+          "bbox_pt": [
+            26.92913055419922,
+            65.67633056640625,
+            201.64515686035156,
+            96.67633056640625
+          ]
+        },
+        {
+          "text": "Skroz pametno.",
+          "font_pt": 31.0,
+          "bbox_pt": [
+            26.92913055419922,
+            99.692138671875,
+            256.91815185546875,
+            130.692138671875
+          ]
+        },
+        {
+          "text": "Zašto novo, kad ima i skoro novo?",
+          "font_pt": 10.699999809265137,
+          "bbox_pt": [
+            26.92913055419922,
+            139.32833862304688,
+            193.185791015625,
+            150.02833557128906
+          ]
+        },
+        {
+          "text": "Pogledaj ponudu",
+          "font_pt": 8.600000381469727,
+          "bbox_pt": [
+            26.92913055419922,
+            336.6145935058594,
+            94.4735336303711,
+            345.214599609375
+          ]
+        },
+        {
+          "text": "ReKlik.shop",
+          "font_pt": 21.0,
+          "bbox_pt": [
+            26.92913055419922,
+            352.39697265625,
+            145.5791473388672,
+            373.39697265625
+          ]
+        },
+        {
+          "text": "+381 63 697 007",
+          "font_pt": 12.600000381469727,
+          "bbox_pt": [
+            26.92913055419922,
+            381.00665283203125,
+            121.88272857666016,
+            393.6066589355469
+          ]
+        },
+        {
+          "text": "Pouzećem bez doplate",
+          "font_pt": 8.300000190734863,
+          "bbox_pt": [
+            26.92913055419922,
+            404.3214111328125,
+            114.02933502197266,
+            412.62139892578125
+          ]
+        }
+      ]
+    },
+    {
+      "image_width_mm": 78.75,
+      "image_height_mm": 52.5,
+      "image_effective_dpi": 495.4,
+      "qr_size_mm_including_quiet_zone": 32.0,
+      "qr_modules_including_quiet_zone": 37,
+      "qr_module_size_mm": 0.8649,
+      "qr_quiet_zone_modules_each_side": 4,
+      "file": "reklik-a6-a-clean.pdf",
+      "media_mm": [
+        105.0,
+        148.0
+      ],
+      "trim_box_mm_from_top_left": [
+        0.0,
+        0.0,
+        105.0,
+        148.0
+      ],
+      "qr_decoded_from_exported_pdf_at_300dpi": "https://reklik.gcchelp.com/r/a6-a",
+      "text_and_serbian_diacritics_verified": true,
+      "native_text_safe_bounds_verified": true,
+      "fonts_embedded": true,
+      "text_spans": [
+        {
+          "text": "ReKlik.shop",
+          "font_pt": 15.699999809265137,
+          "bbox_pt": [
+            18.425199508666992,
+            22.755447387695312,
+            107.13020324707031,
+            38.455448150634766
+          ]
+        },
+        {
+          "text": "LAPTOPOVI I TELEFONI",
+          "font_pt": 7.800000190734863,
+          "bbox_pt": [
+            193.4906005859375,
+            26.86693572998047,
+            279.2126159667969,
+            34.666934967041016
+          ]
+        },
+        {
+          "text": "Skoro novo.",
+          "font_pt": 31.0,
+          "bbox_pt": [
+            18.425199508666992,
+            57.172515869140625,
+            193.14122009277344,
+            88.17251586914062
+          ]
+        },
+        {
+          "text": "Skroz pametno.",
+          "font_pt": 31.0,
+          "bbox_pt": [
+            18.425199508666992,
+            91.188232421875,
+            248.4142303466797,
+            122.188232421875
+          ]
+        },
+        {
+          "text": "Zašto novo, kad ima i skoro novo?",
+          "font_pt": 10.699999809265137,
+          "bbox_pt": [
+            18.425199508666992,
+            130.82443237304688,
+            184.68185424804688,
+            141.52442932128906
+          ]
+        },
+        {
+          "text": "Pogledaj ponudu",
+          "font_pt": 8.600000381469727,
+          "bbox_pt": [
+            18.425199508666992,
+            328.1107177734375,
+            85.9696044921875,
+            336.7107238769531
+          ]
+        },
+        {
+          "text": "ReKlik.shop",
+          "font_pt": 21.0,
+          "bbox_pt": [
+            18.425199508666992,
+            343.89306640625,
+            137.07521057128906,
+            364.89306640625
+          ]
+        },
+        {
+          "text": "+381 63 697 007",
+          "font_pt": 12.600000381469727,
+          "bbox_pt": [
+            18.425199508666992,
+            372.5027770996094,
+            113.37879943847656,
+            385.102783203125
+          ]
+        },
+        {
+          "text": "Pouzećem bez doplate",
+          "font_pt": 8.300000190734863,
+          "bbox_pt": [
+            18.425199508666992,
+            395.8175354003906,
+            105.52539825439453,
+            404.1175231933594
+          ]
+        }
+      ]
+    },
+    {
+      "image_width_mm": 71.25,
+      "image_height_mm": 47.5,
+      "image_effective_dpi": 547.6,
+      "qr_size_mm_including_quiet_zone": 32.0,
+      "qr_modules_including_quiet_zone": 37,
+      "qr_module_size_mm": 0.8649,
+      "qr_quiet_zone_modules_each_side": 4,
+      "file": "reklik-a6-b-bleed.pdf",
+      "media_mm": [
+        111.0,
+        154.0
+      ],
+      "trim_box_mm_from_top_left": [
+        3.0,
+        3.0,
+        108.0,
+        151.0
+      ],
+      "qr_decoded_from_exported_pdf_at_300dpi": "https://reklik.gcchelp.com/r/a6-b",
+      "text_and_serbian_diacritics_verified": true,
+      "native_text_safe_bounds_verified": true,
+      "fonts_embedded": true,
+      "text_spans": [
+        {
+          "text": "ReKlik.shop",
+          "font_pt": 15.699999809265137,
+          "bbox_pt": [
+            26.92913055419922,
+            31.259384155273438,
+            115.6341323852539,
+            46.95938491821289
+          ]
+        },
+        {
+          "text": "LAPTOPOVI I TELEFONI",
+          "font_pt": 7.800000190734863,
+          "bbox_pt": [
+            201.9945068359375,
+            35.370872497558594,
+            287.7165222167969,
+            43.17087173461914
+          ]
+        },
+        {
+          "text": "Zašto novo,",
+          "font_pt": 29.0,
+          "bbox_pt": [
+            26.92913055419922,
+            61.622032165527344,
+            187.5311279296875,
+            90.62203216552734
+          ]
+        },
+        {
+          "text": "kad ima i",
+          "font_pt": 29.0,
+          "bbox_pt": [
+            26.92913055419922,
+            93.3701400756836,
+            148.99014282226562,
+            122.3701400756836
+          ]
+        },
+        {
+          "text": "skoro novo?",
+          "font_pt": 29.0,
+          "bbox_pt": [
+            26.92913055419922,
+            125.11812591552734,
+            193.6211395263672,
+            154.11813354492188
+          ]
+        },
+        {
+          "text": "Testirani uređaji. Pametan izbor.",
+          "font_pt": 10.399999618530273,
+          "bbox_pt": [
+            26.92913055419922,
+            159.69659423828125,
+            183.5011444091797,
+            170.09658813476562
+          ]
+        },
+        {
+          "text": "Pogledaj ponudu",
+          "font_pt": 8.600000381469727,
+          "bbox_pt": [
+            26.92913055419922,
+            336.6145935058594,
+            94.4735336303711,
+            345.214599609375
+          ]
+        },
+        {
+          "text": "ReKlik.shop",
+          "font_pt": 21.0,
+          "bbox_pt": [
+            26.92913055419922,
+            352.39697265625,
+            145.5791473388672,
+            373.39697265625
+          ]
+        },
+        {
+          "text": "+381 63 697 007",
+          "font_pt": 12.600000381469727,
+          "bbox_pt": [
+            26.92913055419922,
+            381.00665283203125,
+            121.88272857666016,
+            393.6066589355469
+          ]
+        },
+        {
+          "text": "Pouzećem bez doplate",
+          "font_pt": 8.300000190734863,
+          "bbox_pt": [
+            26.92913055419922,
+            404.3214111328125,
+            114.02933502197266,
+            412.62139892578125
+          ]
+        }
+      ]
+    },
+    {
+      "image_width_mm": 71.25,
+      "image_height_mm": 47.5,
+      "image_effective_dpi": 547.6,
+      "qr_size_mm_including_quiet_zone": 32.0,
+      "qr_modules_including_quiet_zone": 37,
+      "qr_module_size_mm": 0.8649,
+      "qr_quiet_zone_modules_each_side": 4,
+      "file": "reklik-a6-b-clean.pdf",
+      "media_mm": [
+        105.0,
+        148.0
+      ],
+      "trim_box_mm_from_top_left": [
+        0.0,
+        0.0,
+        105.0,
+        148.0
+      ],
+      "qr_decoded_from_exported_pdf_at_300dpi": "https://reklik.gcchelp.com/r/a6-b",
+      "text_and_serbian_diacritics_verified": true,
+      "native_text_safe_bounds_verified": true,
+      "fonts_embedded": true,
+      "text_spans": [
+        {
+          "text": "ReKlik.shop",
+          "font_pt": 15.699999809265137,
+          "bbox_pt": [
+            18.425199508666992,
+            22.755447387695312,
+            107.13020324707031,
+            38.455448150634766
+          ]
+        },
+        {
+          "text": "LAPTOPOVI I TELEFONI",
+          "font_pt": 7.800000190734863,
+          "bbox_pt": [
+            193.4906005859375,
+            26.86693572998047,
+            279.2126159667969,
+            34.666934967041016
+          ]
+        },
+        {
+          "text": "Zašto novo,",
+          "font_pt": 29.0,
+          "bbox_pt": [
+            18.425199508666992,
+            53.11821746826172,
+            179.02719116210938,
+            82.11821746826172
+          ]
+        },
+        {
+          "text": "kad ima i",
+          "font_pt": 29.0,
+          "bbox_pt": [
+            18.425199508666992,
+            84.86620330810547,
+            140.4862060546875,
+            113.86620330810547
+          ]
+        },
+        {
+          "text": "skoro novo?",
+          "font_pt": 29.0,
+          "bbox_pt": [
+            18.425199508666992,
+            116.61421966552734,
+            185.11720275878906,
+            145.61422729492188
+          ]
+        },
+        {
+          "text": "Testirani uređaji. Pametan izbor.",
+          "font_pt": 10.399999618530273,
+          "bbox_pt": [
+            18.425199508666992,
+            151.19265747070312,
+            174.99720764160156,
+            161.5926513671875
+          ]
+        },
+        {
+          "text": "Pogledaj ponudu",
+          "font_pt": 8.600000381469727,
+          "bbox_pt": [
+            18.425199508666992,
+            328.1107177734375,
+            85.9696044921875,
+            336.7107238769531
+          ]
+        },
+        {
+          "text": "ReKlik.shop",
+          "font_pt": 21.0,
+          "bbox_pt": [
+            18.425199508666992,
+            343.89306640625,
+            137.07521057128906,
+            364.89306640625
+          ]
+        },
+        {
+          "text": "+381 63 697 007",
+          "font_pt": 12.600000381469727,
+          "bbox_pt": [
+            18.425199508666992,
+            372.5027770996094,
+            113.37879943847656,
+            385.102783203125
+          ]
+        },
+        {
+          "text": "Pouzećem bez doplate",
+          "font_pt": 8.300000190734863,
+          "bbox_pt": [
+            18.425199508666992,
+            395.8175354003906,
+            105.52539825439453,
+            404.1175231933594
+          ]
+        }
+      ]
+    }
+  ]
+}
