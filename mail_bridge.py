@@ -78,11 +78,21 @@ def capture(data,state=None):
     message_id=str(raw.get('Message-ID',''))
     identity=hashlib.sha256((sender+'|'+message_id+'|'+subject+'|'+text).encode()).hexdigest()
     root=Path(state or os.environ.get('REKLIK_STATE',str(Path.home()/'.local/state/reklik')))/'correspondence'
+    # Keep the authorized original before the normal mailbox delivery strips MIME
+    # parts. This also retains billing documents without exposing them to the AI.
+    original=str(data.get('raw',''))
+    if original:
+        originals=root/'originals';originals.mkdir(parents=True,exist_ok=True,mode=0o700)
+        archive=originals/(identity+'.eml')
+        if not archive.exists():
+            temporary=originals/(identity+'.tmp')
+            temporary.write_text(original);temporary.chmod(0o600);temporary.replace(archive)
     credentials_saved=save_ads_key(raw,config,root)
     incoming=root/'incoming';incoming.mkdir(parents=True,exist_ok=True,mode=0o700)
     target=incoming/(identity+'.json')
     if target.exists():return identity
     payload={'id':identity,'from':sender,'to':recipient,'subject':subject,'text':redact(text)[:18000],
-             'message_id':message_id,'received_at':int(time.time()),'dry_run':bool(data.get('reklik_dry_run')),'credentials_saved':credentials_saved}
+             'message_id':message_id,'received_at':int(time.time()),'dry_run':bool(data.get('reklik_dry_run')),'credentials_saved':credentials_saved,
+             'original_saved':bool(original),'attachment_count':sum(1 for part in raw.walk() if part.get_filename())}
     temporary=incoming/(identity+'.tmp');temporary.write_text(json.dumps(payload,ensure_ascii=False));temporary.chmod(0o600);temporary.replace(target)
     return identity

@@ -566,12 +566,47 @@ class StoreTests(unittest.TestCase):
             self.assertEqual(received['subject'],'JSON ključ — ReKlik')
             self.assertEqual(received['text'].strip(),'Šaljem već pripremljen ključ.')
             self.assertTrue(received['credentials_saved']);self.assertNotIn(pem,received['text'])
+            self.assertTrue(received['original_saved']);self.assertEqual(received['attachment_count'],1)
+            original=root/'originals'/(identity+'.eml')
+            self.assertEqual(original.stat().st_mode & 0o777,0o600)
+            from email.parser import Parser
+            from email import policy
+            restored=Parser(policy=policy.default).parsestr(original.read_text())
+            attachment=next(restored.iter_attachments())
+            self.assertEqual(json.loads(attachment.get_payload(decode=True)),key)
             saved=root/'credentials/google-ads-service-account.json'
             self.assertEqual(saved.stat().st_mode & 0o777,0o600)
             self.assertEqual(json.loads(saved.read_text()),key)
             self.assertEqual(mail_bridge.capture(data,directory),identity)
             saved.unlink();config['allow_keys_by_email']=False;(root/'settings.json').write_text(json.dumps(config))
             self.assertFalse(mail_bridge.save_ads_key(msg,config,root));self.assertFalse(saved.exists())
+
+    def test_mail_original_preserves_billing_attachments_and_excludes_unknown_senders(self):
+        import mail_bridge
+        from email.message import EmailMessage
+        from email.parser import Parser
+        from email import policy
+        message=EmailMessage();message['From']='helper@example.test';message['To']='shop@example.test'
+        message['Subject']='ReKlik — naplata';message['Message-ID']='<billing@example.test>'
+        message.set_content('Prilog sa podacima naplate.')
+        attachment=b'%PDF-1.4\nprivate billing fixture\n%%EOF'
+        message.add_attachment(attachment,maintype='application',subtype='pdf',filename='billing.pdf')
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)/'correspondence';root.mkdir()
+            config={'enabled':True,'correspondent':'helper@example.test','owner':'owner@example.test','mailbox':'shop@example.test'}
+            (root/'settings.json').write_text(json.dumps(config))
+            data={'from':'helper@example.test','to':'shop@example.test','raw':message.as_string()}
+            identity=mail_bridge.capture(data,directory)
+            received=json.loads((root/'incoming'/(identity+'.json')).read_text())
+            self.assertTrue(received['original_saved']);self.assertEqual(received['attachment_count'],1)
+            self.assertFalse(received['credentials_saved']);self.assertNotIn('private billing fixture',received['text'])
+            raw=root/'originals'/(identity+'.eml')
+            restored=Parser(policy=policy.default).parsestr(raw.read_text())
+            self.assertEqual(next(restored.iter_attachments()).get_payload(decode=True),attachment)
+            self.assertEqual(mail_bridge.capture(data,directory),identity)
+            self.assertEqual(len(list((root/'originals').glob('*.eml'))),1)
+            self.assertIsNone(mail_bridge.capture(dict(data,**{'from':'stranger@example.test'}),directory))
+            self.assertEqual(len(list((root/'originals').glob('*.eml'))),1)
 
     def test_mail_reply_controller_copies_owner_routes_decisions_and_does_not_repeat(self):
         import correspondence
