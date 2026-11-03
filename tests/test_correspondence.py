@@ -104,6 +104,37 @@ class CorrespondenceTests(unittest.TestCase):
             self.assertEqual(correspondence.run_once(),0)
             draft.assert_not_called();send.assert_not_called()
 
+    def test_archive_mail_never_drafts_or_sends_even_after_sender_role_changes(self):
+        vendor='quotes@midas-network.com'
+        # The saved flag survives removal of the archive config and a later
+        # change that would otherwise make this sender the authorized helper.
+        self.config['correspondent']=vendor
+        self.message(sender=vendor,archive_only=True)
+        with patch.object(correspondence,'draft') as draft,patch.object(correspondence,'send') as send:
+            self.assertEqual(correspondence.run_once(),0)
+            self.assertFalse((self.root/'outgoing').exists())
+            draft.assert_not_called();send.assert_not_called();store.audit.assert_not_called()
+        # Current domain configuration also protects legacy captures that have
+        # no saved flag, including an overlapping helper or owner address.
+        self.config['archive_sender_domains']=['midas-network.com']
+        self.message(archive_only=False)
+        self.config['owner']=vendor
+        self.message('b'*64,sender=vendor)
+        with patch.object(correspondence,'draft') as draft,patch.object(correspondence,'send') as send:
+            self.assertEqual(correspondence.run_once(),0)
+            self.assertFalse((self.root/'outgoing').exists())
+            draft.assert_not_called();send.assert_not_called();store.audit.assert_not_called()
+
+    def test_passive_vendor_does_not_block_normal_helper_reply(self):
+        self.config['archive_sender_domains']=['midas-network.com']
+        self.message(sender='quotes@midas-network.com',archive_only=True)
+        self.message('b'*64)
+        with patch.object(correspondence,'draft',return_value=self.output) as draft,patch.object(correspondence,'send',return_value='provider-id') as send:
+            self.assertEqual(correspondence.run_once(),1)
+            self.assertEqual(draft.call_args.args[0]['id'],'b'*64)
+            self.assertEqual(send.call_args.args[0]['to'],['helper@example.test','owner@example.test'])
+            self.assertFalse((self.root/'outgoing'/('a'*64+'.json')).exists())
+
     def test_changed_context_does_not_reuse_stale_cached_setup_reply(self):
         self.message()
         correspondence.save(self.root/'outgoing'/('a'*64+'.json'),{

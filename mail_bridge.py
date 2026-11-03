@@ -55,18 +55,28 @@ def redact(text):
     return re.sub(r'(?<!\d)(?:\d[ -]?){13,19}(?!\d)',card,text)
 
 
+def archive_only_sender(sender,config):
+    """Optional exact domains retain mail without granting reply/key privileges."""
+    domains=config.get('archive_sender_domains',[])
+    if not isinstance(domains,list):return False
+    local,separator,domain=parseaddr(str(sender))[1].lower().rpartition('@')
+    return bool(local and separator and domain and domain in
+                [value.strip().lower() for value in domains if isinstance(value,str)])
+
+
 def capture(data,state=None):
     config=settings(state)
     if not config.get('enabled'):return None
     helper=config.get('correspondent','').lower();owner=config.get('owner','').lower()
     sender=parseaddr(str(data.get('from','')))[1].lower()
-    if sender not in (helper,owner):return None
+    archive_only=archive_only_sender(sender,config)
+    if not archive_only and sender not in (helper,owner):return None
     recipient=parseaddr(str(data.get('to','')))[1].lower()
     if recipient!=config.get('mailbox','').lower():return None
     raw=Parser(policy=policy.default).parsestr(str(data.get('raw','')))
-    if raw.get('Auto-Submitted','no').lower()!='no' or raw.get('Precedence','').lower() in ('bulk','list','junk'):return None
+    if not archive_only and (raw.get('Auto-Submitted','no').lower()!='no' or raw.get('Precedence','').lower() in ('bulk','list','junk')):return None
     subject=str(make_header(decode_header(str(raw.get('Subject') or data.get('subject') or '(bez naslova)'))))[:250]
-    if sender==owner and not re.search(r'reklik|google.?ads',subject,re.I):return None
+    if not archive_only and sender==owner and not re.search(r'reklik|google.?ads',subject,re.I):return None
     text=''
     if raw:
         part=raw.get_body(preferencelist=('plain',)) if raw.is_multipart() else raw
@@ -87,12 +97,14 @@ def capture(data,state=None):
         if not archive.exists():
             temporary=originals/(identity+'.tmp')
             temporary.write_text(original);temporary.chmod(0o600);temporary.replace(archive)
-    credentials_saved=save_ads_key(raw,config,root)
+    credentials_saved=False if archive_only else save_ads_key(raw,config,root)
     incoming=root/'incoming';incoming.mkdir(parents=True,exist_ok=True,mode=0o700)
     target=incoming/(identity+'.json')
     if target.exists():return identity
     payload={'id':identity,'from':sender,'to':recipient,'subject':subject,'text':redact(text)[:18000],
              'message_id':message_id,'received_at':int(time.time()),'dry_run':bool(data.get('reklik_dry_run')),'credentials_saved':credentials_saved,
              'original_saved':bool(original),'attachment_count':sum(1 for part in raw.walk() if part.get_filename())}
+    if archive_only:
+        payload.update(archive_only=True,subject=redact(subject),message_id=redact(message_id))
     temporary=incoming/(identity+'.tmp');temporary.write_text(json.dumps(payload,ensure_ascii=False));temporary.chmod(0o600);temporary.replace(target)
     return identity

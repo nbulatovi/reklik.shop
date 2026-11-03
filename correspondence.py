@@ -14,7 +14,7 @@ from email.utils import parseaddr
 from PIL import Image
 import requests
 import store
-from mail_bridge import settings,redact
+from mail_bridge import settings,redact,archive_only_sender
 
 SCHEMA={'type':'object','additionalProperties':False,'properties':{'reply_needed':{'type':'boolean'},'subject':{'type':'string'},'body':{'type':'string'},'needs_owner':{'type':'boolean'},'summary':{'type':'string'}},'required':['reply_needed','subject','body','needs_owner','summary']}
 ROOT=store.STATE/'correspondence'
@@ -213,6 +213,9 @@ def run_once():
     if not incoming.exists():return 0
     for path in sorted(incoming.glob('*.json'),key=lambda p:p.stat().st_mtime):
         message=json.loads(path.read_text());identity=message.get('id','')
+        # Retained vendor mail never enters drafting, even after config changes
+        # or when an archive domain overlaps the helper/owner addresses.
+        if message.get('archive_only') or archive_only_sender(message.get('from',''),config):continue
         if not re.fullmatch(r'[a-f0-9]{64}',identity) or message.get('from') not in (helper,owner):continue
         status_path=outgoing/(identity+'.json')
         previous=json.loads(status_path.read_text()) if status_path.exists() else {}
