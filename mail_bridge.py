@@ -64,6 +64,13 @@ def archive_only_sender(sender,config):
                 [value.strip().lower() for value in domains if isinstance(value,str)])
 
 
+def halo_input(subject,text,config):
+    """Recognize delegated input, never authorization to publish or spend."""
+    return config.get('halooglasi_input_enabled') is True and bool(re.search(
+        r'(?<!\w)(?:halo[\s.-]*oglas\w*|хало[\s.-]*оглас\w*)(?!\w)',
+        str(subject)+'\n'+str(text),re.I))
+
+
 def capture(data,state=None):
     config=settings(state)
     if not config.get('enabled'):return None
@@ -76,7 +83,6 @@ def capture(data,state=None):
     raw=Parser(policy=policy.default).parsestr(str(data.get('raw','')))
     if not archive_only and (raw.get('Auto-Submitted','no').lower()!='no' or raw.get('Precedence','').lower() in ('bulk','list','junk')):return None
     subject=str(make_header(decode_header(str(raw.get('Subject') or data.get('subject') or '(bez naslova)'))))[:250]
-    if not archive_only and sender==owner and not re.search(r'reklik|google.?ads',subject,re.I):return None
     text=''
     if raw:
         part=raw.get_body(preferencelist=('plain',)) if raw.is_multipart() else raw
@@ -85,6 +91,8 @@ def capture(data,state=None):
             except (LookupError,UnicodeError):pass
     if not text:text=str(data.get('text',''))
     if not text:text=re.sub(r'<[^>]+>',' ',str(data.get('html','')))
+    delegated_halo=not archive_only and halo_input(subject,text,config)
+    if not archive_only and sender==owner and not re.search(r'reklik|google.?ads',subject,re.I) and not delegated_halo:return None
     message_id=str(raw.get('Message-ID',''))
     identity=hashlib.sha256((sender+'|'+message_id+'|'+subject+'|'+text).encode()).hexdigest()
     root=Path(state or os.environ.get('REKLIK_STATE',str(Path.home()/'.local/state/reklik')))/'correspondence'
@@ -97,7 +105,7 @@ def capture(data,state=None):
         if not archive.exists():
             temporary=originals/(identity+'.tmp')
             temporary.write_text(original);temporary.chmod(0o600);temporary.replace(archive)
-    credentials_saved=False if archive_only else save_ads_key(raw,config,root)
+    credentials_saved=False if archive_only or delegated_halo else save_ads_key(raw,config,root)
     incoming=root/'incoming';incoming.mkdir(parents=True,exist_ok=True,mode=0o700)
     target=incoming/(identity+'.json')
     if target.exists():return identity
@@ -106,5 +114,7 @@ def capture(data,state=None):
              'original_saved':bool(original),'attachment_count':sum(1 for part in raw.walk() if part.get_filename())}
     if archive_only:
         payload.update(archive_only=True,subject=redact(subject),message_id=redact(message_id))
+    elif delegated_halo:
+        payload.update(input_topic='halooglasi',subject=redact(subject),message_id=redact(message_id))
     temporary=incoming/(identity+'.tmp');temporary.write_text(json.dumps(payload,ensure_ascii=False));temporary.chmod(0o600);temporary.replace(target)
     return identity

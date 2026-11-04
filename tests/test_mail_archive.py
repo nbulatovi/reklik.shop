@@ -110,5 +110,28 @@ class MailArchiveTests(unittest.TestCase):
                     save_key.assert_not_called()
                 self.assertTrue(json.loads((self.root/'incoming'/(identity+'.json')).read_text())['archive_only'])
 
+    def test_explicit_halo_delegation_retains_owner_input_and_skips_key_ingestion(self):
+        self.config.update(halooglasi_input_enabled=True,halooglasi_input_after=100);self.save_config()
+        for subject in ('Halo Oglasi — tekst oglasa','Хало огласи — предлог','halooglasi.com oglas'):
+            message=self.message('owner@example.test');message.replace_header('Subject',subject)
+            message.add_attachment(b'{"private_key":"fixture"}',maintype='application',subtype='json',filename='key.json')
+            with self.subTest(subject=subject),patch.object(mail_bridge,'save_ads_key') as save_key:
+                identity=self.capture(message);self.assertIsNotNone(identity);save_key.assert_not_called()
+                data=json.loads((self.root/'incoming'/(identity+'.json')).read_text())
+                self.assertEqual(data['input_topic'],'halooglasi');self.assertTrue(data['original_saved'])
+                self.assertFalse(data['credentials_saved']);self.assertEqual(data['attachment_count'],1)
+                self.assertNotIn('body-secret',json.dumps(data));self.assertNotIn('fixture',json.dumps(data))
+                self.assertEqual(self.capture(message),identity)
+        self.assertIsNone(self.capture(self.message('attacker@example.test')))
+
+    def test_halo_owner_filter_requires_explicit_optin_but_helper_capture_is_unchanged(self):
+        message=self.message('owner@example.test');message.replace_header('Subject','Halo oglasi')
+        for value in (None,False,'true'):
+            with self.subTest(value=value):
+                self.config['halooglasi_input_enabled']=value;self.save_config()
+                self.assertIsNone(self.capture(message))
+        helper=self.message('helper@example.test');helper.replace_header('Subject','Halo oglasi')
+        self.assertIsNotNone(self.capture(helper))
+
 
 if __name__=='__main__':unittest.main()

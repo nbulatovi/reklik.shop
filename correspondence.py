@@ -14,7 +14,7 @@ from email.utils import parseaddr
 from PIL import Image
 import requests
 import store
-from mail_bridge import settings,redact,archive_only_sender
+from mail_bridge import settings,redact,archive_only_sender,halo_input
 
 SCHEMA={'type':'object','additionalProperties':False,'properties':{'reply_needed':{'type':'boolean'},'subject':{'type':'string'},'body':{'type':'string'},'needs_owner':{'type':'boolean'},'summary':{'type':'string'}},'required':['reply_needed','subject','body','needs_owner','summary']}
 ROOT=store.STATE/'correspondence'
@@ -204,6 +204,43 @@ def send(payload):
     return result['id']
 
 
+def queue_halo_input(message,config):
+    """Retain a delegated proposal for local inventory review, without AI/mail."""
+    if config.get('halooglasi_input_enabled') is not True:return False
+    configured=config.get('halooglasi_input_after')
+    watermark_path=ROOT/'halo-input-watermark.json'
+    previous=json.loads(watermark_path.read_text()) if watermark_path.exists() else {}
+    values=[configured,previous.get('received_after',configured)]
+    if any(isinstance(value,bool) or not isinstance(value,(int,float)) or not math.isfinite(value) or value<0 for value in values):
+        raise ValueError('Halo input requires a valid halooglasi_input_after.')
+    cutoff=max(values)
+    if previous.get('received_after')!=cutoff:save(watermark_path,{'received_after':cutoff})
+    received=message.get('received_at')
+    if isinstance(received,bool) or not isinstance(received,(int,float)) or not math.isfinite(received) or received<=cutoff:return False
+    identity=message['id'];folder=ROOT/'marketing-input'/'halooglasi'/identity
+    target=folder/'proposal.json'
+    if target.exists():return False
+    images,image_status=extract_screenshots(message,folder/'attachments',config)
+    original=ROOT/'originals'/(identity+'.eml')
+    proposal={'id':identity,'topic':'halooglasi','status':'awaiting_inventory_validation',
+              'from':message['from'],'subject':redact(message.get('subject','')),
+              'text':redact(message.get('text',''))[:18000],
+              'received_at':received,'queued_at':store.now(),
+              'original_path':str(original) if original.is_file() else None,
+              'photo_paths':[str(path) for path in images],'attachment_status':image_status,
+              'attachment_count':message.get('attachment_count',0),
+              'constraints':{'free_listings_only':True,'automatic_publication':False,
+                             'inventory_validation_required':True,'manual_specs_must_be_preserved':True,
+                             'public_product_links':'https://reklik.shop/proizvod/<id>/',
+                             'paid_ads_authorized':False,'credential_or_budget_changes_authorized':False}}
+    save(target,proposal)
+    save(ROOT/'outgoing'/(identity+'.json'),{'id':identity,'status':'queued_input','topic':'halooglasi',
+         'proposal_path':str(target),'received_at':received,'queued_at':store.now(),
+         'summary':'Halo Oglasi input retained for inventory validation; no reply or publication sent.'})
+    store.audit('halooglasi_email_input_queued',identity,message['from'])
+    return True
+
+
 def run_once():
     config=settings(store.STATE)
     if not config.get('enabled'):return 0
@@ -217,6 +254,9 @@ def run_once():
         # or when an archive domain overlaps the helper/owner addresses.
         if message.get('archive_only') or archive_only_sender(message.get('from',''),config):continue
         if not re.fullmatch(r'[a-f0-9]{64}',identity) or message.get('from') not in (helper,owner):continue
+        if message.get('input_topic')=='halooglasi' or halo_input(message.get('subject',''),message.get('text',''),config):
+            if queue_halo_input(message,config):return 1
+            continue
         status_path=outgoing/(identity+'.json')
         previous=json.loads(status_path.read_text()) if status_path.exists() else {}
         if previous.get('status') in TERMINAL_STATUSES:continue

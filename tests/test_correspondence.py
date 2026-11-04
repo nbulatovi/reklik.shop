@@ -135,6 +135,61 @@ class CorrespondenceTests(unittest.TestCase):
             self.assertEqual(send.call_args.args[0]['to'],['helper@example.test','owner@example.test'])
             self.assertFalse((self.root/'outgoing'/('a'*64+'.json')).exists())
 
+    def test_halo_input_retains_proposal_and_validated_photos_without_model_or_mail(self):
+        self.config.update(halooglasi_input_enabled=True,halooglasi_input_after=100)
+        png=self.image_bytes()
+        message,email=self.retained([(png,'image/png','device.png'),
+                                    (b'{"private_key":"not-for-model"}','application/json','key.json')])
+        message.update(subject='Halo oglasi — predlog',text='Dell 3590, predlog teksta.\npassword: secret-value')
+        (self.incoming/(message['id']+'.json')).write_text(json.dumps(message))
+        with patch.object(correspondence,'draft') as draft,patch.object(correspondence,'send') as send:
+            self.assertEqual(correspondence.run_once(),1)
+            target=self.root/'marketing-input'/'halooglasi'/message['id']/'proposal.json'
+            first=target.read_bytes();proposal=json.loads(first)
+            self.assertEqual(proposal['status'],'awaiting_inventory_validation')
+            self.assertEqual(proposal['constraints']['public_product_links'],'https://reklik.shop/proizvod/<id>/')
+            self.assertTrue(proposal['constraints']['free_listings_only'])
+            self.assertFalse(proposal['constraints']['automatic_publication'])
+            self.assertFalse(proposal['constraints']['paid_ads_authorized'])
+            self.assertEqual(Path(proposal['original_path']).read_text(),email.as_string())
+            self.assertEqual([Path(path).read_bytes() for path in proposal['photo_paths']],[png])
+            self.assertNotIn('secret-value',first.decode());self.assertNotIn('not-for-model',first.decode())
+            self.assertEqual(target.stat().st_mode&0o777,0o600)
+            self.assertEqual(Path(proposal['photo_paths'][0]).stat().st_mode&0o777,0o600)
+            self.assertEqual(self.status()['status'],'queued_input')
+            self.assertEqual(correspondence.run_once(),0)
+            self.assertEqual(target.read_bytes(),first)
+            draft.assert_not_called();send.assert_not_called()
+            store.audit.assert_called_once_with('halooglasi_email_input_queued',message['id'],self.config['correspondent'])
+
+    def test_halo_does_not_steal_google_replies_or_admit_unknown_stale_or_archive_mail(self):
+        self.config.update(halooglasi_input_enabled=True,halooglasi_input_after=100)
+        self.message(subject='Halo oglasi',received=100)
+        self.message('b'*64,subject='Halo oglasi',sender='attacker@example.test')
+        self.message('c'*64,subject='Halo oglasi',archive_only=True)
+        self.message('d'*64)
+        with patch.object(correspondence,'draft',return_value=self.output) as draft,patch.object(correspondence,'send',return_value='provider-id') as send:
+            self.assertEqual(correspondence.run_once(),1)
+            self.assertEqual(draft.call_args.args[0]['id'],'d'*64)
+            self.assertEqual(send.call_args.args[0]['to'],[self.config['correspondent'],self.config['owner']])
+            self.assertFalse((self.root/'marketing-input').exists())
+
+    def test_halo_tag_remains_passive_after_disable_and_cutoff_cannot_regress(self):
+        self.config.update(halooglasi_input_enabled=True,halooglasi_input_after=100)
+        self.message(subject='Хало огласи',received=101)
+        with patch.object(correspondence,'draft') as draft,patch.object(correspondence,'send') as send:
+            self.assertEqual(correspondence.run_once(),1)
+            self.config['halooglasi_input_after']=50
+            self.message('b'*64,subject='Halo oglasi',received=100)
+            self.assertEqual(correspondence.run_once(),0)
+            self.assertEqual(json.loads((self.root/'halo-input-watermark.json').read_text())['received_after'],100)
+            self.config['halooglasi_input_enabled']=False
+            self.message('c'*64,subject='Re: dogovor',text='Evo teksta',input_topic='halooglasi')
+            # Already tagged Halo mail stays passive when its opt-in is removed.
+            (self.incoming/('a'*64+'.json')).unlink();(self.incoming/('b'*64+'.json')).unlink()
+            self.assertEqual(correspondence.run_once(),0)
+            draft.assert_not_called();send.assert_not_called()
+
     def test_changed_context_does_not_reuse_stale_cached_setup_reply(self):
         self.message()
         correspondence.save(self.root/'outgoing'/('a'*64+'.json'),{
