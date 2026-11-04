@@ -1151,6 +1151,18 @@ class StoreTests(unittest.TestCase):
             with self.assertRaises(OSError):rates.refresh()
         self.assertEqual(rates.current(),before)
 
+    def test_nbs_middle_parser_accepts_unpadded_official_dates(self):
+        class FixedDateTime(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return cls(2026,1,4,12,tzinfo=tz)
+        for day in ['4.1.2026','04.01.2026','4.01.2026','04.1.2026']:
+            with self.subTest(day=day), patch.object(rates,'datetime',FixedDateTime):
+                document=f'<h6>ФОРМИРАНА НА ДАН {day}. ГОДИНЕ</h6><table><tr><td>EUR</td><td>978</td><td>ЕМУ</td><td>1</td><td>117,6013</td></tr></table>'
+                result=rates.parse(document)
+                self.assertEqual(result['date'],'2026-01-04')
+                self.assertEqual(result['rate'],'117.6013')
+
     def test_checkout_uses_rsd_with_eur_explanation_and_immutable_rate_snapshot(self):
         store.set_settings({'eur_rsd':'117.4822'})
         order=self.order()

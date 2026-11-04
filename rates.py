@@ -13,7 +13,7 @@ SOURCE='https://webappcenter.nbs.rs/ExchangeRateWebApp/ExchangeRate/CurrentMiddl
 
 def parse(document):
     text=html.unescape(re.sub(r'<[^>]+>',' ',document))
-    day=re.search(r'(\d{2}\.\d{2}\.\d{4})',text)
+    day=re.search(r'\b(\d{1,2}\.\d{1,2}\.\d{4})\b',text)
     rate=None
     for row in re.findall(r'<tr\b[^>]*>(.*?)</tr>',document,re.S|re.I):
         cells=[html.unescape(re.sub(r'<[^>]+>','',c)).strip() for c in re.findall(r'<td\b[^>]*>(.*?)</td>',row,re.S|re.I)]
