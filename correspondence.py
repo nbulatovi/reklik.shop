@@ -231,7 +231,9 @@ def queue_halo_input(message,config):
               'attachment_count':message.get('attachment_count',0),
               'constraints':{'free_listings_only':True,'automatic_publication':False,
                              'inventory_validation_required':True,'manual_specs_must_be_preserved':True,
-                             'public_product_links':'https://reklik.shop/proizvod/<id>/',
+                             'inventory_product_reference':'https://reklik.shop/proizvod/<id>/',
+                             'external_links_in_ad_text':False,
+                             'contact_source':'public_store_phone_and_email',
                              'paid_ads_authorized':False,'credential_or_budget_changes_authorized':False}}
     save(target,proposal)
     save(ROOT/'outgoing'/(identity+'.json'),{'id':identity,'status':'queued_input','topic':'halooglasi',

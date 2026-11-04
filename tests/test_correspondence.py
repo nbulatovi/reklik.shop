@@ -147,7 +147,9 @@ class CorrespondenceTests(unittest.TestCase):
             target=self.root/'marketing-input'/'halooglasi'/message['id']/'proposal.json'
             first=target.read_bytes();proposal=json.loads(first)
             self.assertEqual(proposal['status'],'awaiting_inventory_validation')
-            self.assertEqual(proposal['constraints']['public_product_links'],'https://reklik.shop/proizvod/<id>/')
+            self.assertEqual(proposal['constraints']['inventory_product_reference'],'https://reklik.shop/proizvod/<id>/')
+            self.assertFalse(proposal['constraints']['external_links_in_ad_text'])
+            self.assertEqual(proposal['constraints']['contact_source'],'public_store_phone_and_email')
             self.assertTrue(proposal['constraints']['free_listings_only'])
             self.assertFalse(proposal['constraints']['automatic_publication'])
             self.assertFalse(proposal['constraints']['paid_ads_authorized'])
