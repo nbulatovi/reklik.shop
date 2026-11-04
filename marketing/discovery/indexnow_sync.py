@@ -17,7 +17,7 @@ import xml.etree.ElementTree as ET
 import requests
 
 ORIGIN = 'https://reklik.shop'
-KEY_URL = ORIGIN + '/assets/indexnow.txt'
+KEY_URL = ORIGIN + '/indexnow.txt'
 ENDPOINT = 'https://api.indexnow.org/indexnow'
 ALLOWED_PATH = re.compile(r'/(?:|katalog/|proizvod/[1-9][0-9]*/|kategorija/[a-z0-9-]+/|o-nama/|dostava/|garancija/|uslovi/|privatnost/|povracaj/|kontakt/)')
 MAX_URLS = 1000

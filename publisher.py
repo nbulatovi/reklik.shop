@@ -59,6 +59,10 @@ def export():
         shutil.rmtree(temp)
     temp.mkdir()
     shutil.copytree(store.ROOT / 'assets', temp / 'assets')
+    # Root ownership proof covers the entire site; an /assets/ proof only covers that folder.
+    discovery_key = store.ROOT / 'assets' / 'indexnow.txt'
+    if discovery_key.is_file():
+        shutil.copyfile(discovery_key, temp / 'indexnow.txt')
     (temp / 'media').mkdir()
     (temp / 'media/full').mkdir()
     for p in store.products():

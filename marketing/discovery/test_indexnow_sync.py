@@ -91,6 +91,10 @@ class DiscoveryTests(unittest.TestCase):
         self.assertEqual(result['status'], 'received')
         self.assertEqual(result['http_status'], 202)
 
+    def test_ownership_proof_covers_all_public_folders(self):
+        from urllib.parse import urlsplit
+        self.assertEqual(urlsplit(sync.KEY_URL).path.rsplit('/',1)[0], '')
+
     def test_prevent_repeated_submission_within_five_minutes(self):
         self.setup_reads(response(body=b'new'))
         sync.synchronize(self.directory, self.client)

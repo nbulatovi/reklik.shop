@@ -5,7 +5,8 @@ It submits only changed/new URLs and verifies 404/410 before notifying removals.
 The first run registers the current public catalog; subsequent runs compare hashes
 and use conditional HTTP requests. HTTP 200/202 means receipt, not indexing.
 
-The public ownership proof is assets/indexnow.txt. This is intentionally public;
+The public ownership proof is /indexnow.txt (exported from assets/indexnow.txt).
+It must be at the domain root to cover product pages in other folders. It is public;
 it is not an account credential. No customer information, admin URLs, cookies,
 advertising scripts, raw IP addresses or private inventory prices are sent.
 
