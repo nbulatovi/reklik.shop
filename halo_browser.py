@@ -495,6 +495,10 @@ class HaloBrowser:
             route = ['Računari', 'Oprema za računare', 'Ostala oprema za računare']
         elif re.search(r'media player|medija plejer|digital signage', payload['title'], re.I) or payload.get('category_icon') == 'desktop':
             route = ['Računari', 'Desktop računari']
+        elif category == 'oprema':
+            # The shop's general technology-accessory category has an honest
+            # catch-all; an administrator can override it for a narrower group.
+            route = ['Računari', 'Oprema za računare', 'Ostala oprema za računare']
         else:
             raise HaloNeedsReview('category_needs_an_explicit_ui_mapping')
         for category_name in route:
