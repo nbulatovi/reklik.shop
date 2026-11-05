@@ -201,6 +201,15 @@ class HaloMirrorTests(unittest.TestCase):
         self.assertIsNone(mirror.public_listing(self.product))
         self.assertIsNone(mirror.item_status(1)['url'])
 
+    def test_date_only_expiry_does_not_hide_an_observed_active_listing_early(self):
+        binding=self.binding()
+        binding.update(expires_at=mirror.clock()-60,expires_precision='date')
+        mirror.atomic_json(self.root/'state.json',{'version':1,'bindings':{'1':binding}})
+        self.assertIsNotNone(mirror.public_listing(self.product))
+        binding['status']='expired'
+        mirror.atomic_json(self.root/'state.json',{'version':1,'bindings':{'1':binding}})
+        self.assertIsNone(mirror.public_listing(self.product))
+
     def test_corrupt_or_duplicate_identity_state_fails_closed(self):
         (self.root/'state.json').write_text('{broken')
         with self.assertRaises(ValueError):self.sync()

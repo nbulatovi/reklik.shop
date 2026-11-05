@@ -132,7 +132,10 @@ def public_listing(product):
             or not valid_url(url,binding.get('remote_id'))
             or binding.get('fingerprint') != fingerprint(product)):
         return None
-    if binding.get('expires_at') and binding['expires_at'] <= clock():
+    # Halo exposes date-only expiry in its table. That is a renewal hint,
+    # not proof that an observed-active ad expired at midnight that morning.
+    if (binding.get('expires_at') and binding.get('expires_precision')!='date'
+            and binding['expires_at'] <= clock()):
         return None
     return {'url':url,'remote_id':binding['remote_id'],'status':'active'}
 
@@ -310,7 +313,7 @@ def observe(binding, observation):
         raise ValueError('Unexpected marketplace status.')
     binding.update(status='needs_review' if status=='stopped' else status,
                    owned_verified=True,last_checked_at=clock())
-    for key in ('auto_renew','expires_at'):
+    for key in ('auto_renew','expires_at','expires_precision'):
         if key in observation:
             binding[key]=observation[key]
     binding.pop('message',None)
