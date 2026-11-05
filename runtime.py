@@ -36,6 +36,12 @@ def maintenance():
                 source.backup(dest)
                 dest.close(); source.close()
                 target.chmod(0o600)
+                mirror_state=store.STATE/'halo-mirror/state.json'
+                if mirror_state.is_file():
+                    # Retain ad IDs with inventory backups; restore requires account reconciliation.
+                    from halo_mirror import atomic_json
+                    atomic_json(backups/(time.strftime('%Y%m%d-%H')+'.halo.json'),json.loads(mirror_state.read_text()))
+                    for old in sorted(backups.glob('*.halo.json'))[:-48]:old.unlink()
                 for old in sorted(backups.glob('*.sqlite3'))[:-48]:
                     old.unlink()
                 with store.connect(True) as c:

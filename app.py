@@ -60,6 +60,14 @@ app.jinja_env.filters['timestamp_date'] = lambda value: time.strftime('%d.%m.%Y.
 def queue_publish():
     import publisher
     publisher.schedule()
+    try:
+        from halo_mirror import request_sync
+        request_sync()
+    except Exception:
+        # Inventory saves must not wait for, or fail because of, a marketplace.
+        # The independent worker also reconciles the database every 30 seconds.
+        try:store.audit('halo_sync_wakeup_failed',detail='Background polling will retry.')
+        except Exception:pass
 
 
 def halo_url(value, remote_id=None):

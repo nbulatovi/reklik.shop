@@ -91,7 +91,9 @@ def configuration():
             'cdp_url':'http://127.0.0.1:9336',
             'profile_dir':str(store.STATE / 'halo-account-browser'),
             'credentials_path':str(Path.home() / '.secrets/reklik-halooglasi.json'),
-            'lock_path':str(store.STATE / 'marketing/halo-live-2026-11-04/halo-ui.lock'),
+            'lock_path':str(store.STATE / 'halo-ui.lock'),
+            'display':':21','browser_state_dir':str(store.STATE / 'halo-browser'),
+            'category_routes':{},
             **value}
 
 
@@ -494,7 +496,9 @@ def run_once(force=False):
         known=[b['remote_id'] for b in existing['bindings'].values() if b.get('remote_id')]
         factory=lambda:HaloBrowser(cdp_url=settings['cdp_url'],profile_dir=Path(settings['profile_dir']),
                          credentials_path=Path(settings['credentials_path']),
-                         lock_path=Path(settings['lock_path']),owned_ids=known)
+                         lock_path=Path(settings['lock_path']),owned_ids=known,
+                         display=settings['display'],state_dir=Path(settings['browser_state_dir']),
+                         category_routes=settings['category_routes'])
         with LazyAdapter(factory) as adapter:
             result=synchronize(adapter,force=force)
         if result['publish_changed'] and settings['publish_site']:

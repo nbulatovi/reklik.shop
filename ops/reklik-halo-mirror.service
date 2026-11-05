@@ -1,0 +1,18 @@
+[Unit]
+Description=Automatically mirror ReKlik inventory to owned Halo Oglasi listings
+After=network-online.target reklik-halo-display.service
+Wants=network-online.target
+Requires=reklik-halo-display.service
+[Service]
+Type=simple
+WorkingDirectory=%h/projects/reklik.shop
+ExecStart=%h/.local/state/reklik/venv/bin/python %h/projects/reklik.shop/halo_mirror.py --serve
+Environment=DISPLAY=:21
+Environment=XAUTHORITY=%h/.local/state/reklik/halo-browser/Xauthority
+Environment=PYTHONUNBUFFERED=1
+Restart=always
+RestartSec=15
+TimeoutStopSec=30
+UMask=0077
+[Install]
+WantedBy=default.target

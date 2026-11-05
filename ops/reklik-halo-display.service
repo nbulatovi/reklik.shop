@@ -1,0 +1,10 @@
+[Unit]
+Description=Private display for unattended ReKlik Halo browser recovery
+[Service]
+Type=simple
+ExecStart=%h/.local/xvfb/usr/bin/Xvfb :21 -screen 0 1600x1200x24 -noreset -nolisten tcp -auth %h/.local/state/reklik/halo-browser/Xauthority
+Restart=always
+RestartSec=5
+UMask=0077
+[Install]
+WantedBy=default.target

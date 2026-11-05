@@ -231,11 +231,14 @@ class HaloBrowser:
             raise HaloAuthRequired('normal_browser_unavailable')
         self.profile_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
         logfile = self.state_dir / 'chrome.log'
+        environment=dict(os.environ, DISPLAY=self.display)
+        authority=self.state_dir/'Xauthority'
+        if authority.is_file():environment['XAUTHORITY']=str(authority)
         with logfile.open('ab') as output:
             subprocess.Popen([executable, '--user-data-dir=' + str(self.profile_dir),
                               '--remote-debugging-address=127.0.0.1', '--remote-debugging-port=' + str(self.cdp_port),
                               '--no-first-run', '--no-default-browser-check', ORIGIN + '/profil'],
-                             env=dict(os.environ, DISPLAY=self.display), stdout=output, stderr=output, start_new_session=True)
+                             env=environment, stdout=output, stderr=output, start_new_session=True)
         logfile.chmod(0o600)
         for _ in range(20):
             try:
