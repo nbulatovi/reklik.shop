@@ -62,6 +62,53 @@ def queue_publish():
     publisher.schedule()
 
 
+def halo_url(value, remote_id=None):
+    """Only render a canonical listing URL from the expected marketplace."""
+    if not isinstance(value,str):
+        return None
+    try:
+        parsed=urlparse(value)
+        match=re.fullmatch(r'/[a-z0-9/-]+/([1-9][0-9]{5,19})/?',parsed.path)
+        if (parsed.scheme!='https' or parsed.netloc not in ('www.halooglasi.com','halooglasi.com')
+                or parsed.query or parsed.fragment or not match):
+            return None
+        if remote_id is not None and str(remote_id)!=match.group(1):
+            return None
+        return value
+    except (TypeError,ValueError):
+        return None
+
+
+def halo_listing(product):
+    try:
+        if not product.get('active') or int(product.get('quantity',0))<1:
+            return None
+        from halo_mirror import public_listing
+        result=public_listing(product)
+        if not isinstance(result,dict) or result.get('status')!='active' or result.get('remote_id') is None:
+            return None
+        url=halo_url(result.get('url'),result.get('remote_id'))
+        return {'url':url} if url else None
+    except Exception:
+        # Marketplace state must never make a product page unavailable.
+        return None
+
+
+def halo_status(product_id):
+    fallback={'status':'pending','label':'Čeka sinhronizaciju','url':None,'error':''}
+    try:
+        from halo_mirror import item_status
+        result=item_status(product_id)
+        if not isinstance(result,dict):
+            return fallback
+        return {'status':str(result.get('status') or 'pending')[:60],
+                'label':str(result.get('label') or fallback['label'])[:180],
+                'url':halo_url(result.get('url'),result.get('remote_id')),
+                'error':str(result.get('error') or '')[:280]}
+    except Exception:
+        return fallback
+
+
 @app.before_request
 def load_session():
     g.session = None
@@ -124,6 +171,7 @@ def template_context():
     return {'cfg': cfg, 'categories': store.categories(), 'base': '', 'live': True, 'analytics_origin':'',
             'asset_version': str(max((store.ROOT/'assets/style.css').stat().st_mtime_ns,(store.ROOT/'assets/site.js').stat().st_mtime_ns)),
             'csrf': g.session['csrf'] if getattr(g, 'session', None) else '', 'condition_grades':inventory_rules.GRADES,
+            'halo_listing':halo_listing,'halo_status':halo_status,
             'money': lambda cents: store.display_money(cents,'EUR'),
             'minor_money': lambda cents: store.display_money(cents,'RSD'),
             'pricing_explanation': pricing_explanation,
@@ -527,6 +575,19 @@ def admin_dashboard():
 
 def back_admin(tab='inventory', message='', error=''):
     return redirect(url_for('admin_dashboard', tab=tab, message=message, error=error))
+
+
+@app.route('/admin/halo-sync',methods=['POST'])
+@admin_only
+def request_halo_sync():
+    try:
+        from halo_mirror import request_sync
+        request_sync()
+    except Exception as error:
+        store.audit('halo_sync_request_failed',detail=type(error).__name__)
+        return back_admin(error='Sinhronizacija Halo oglasa trenutno nije dostupna. Pokušajte ponovo.')
+    store.audit('halo_sync_requested')
+    return back_admin(message='Provera Halo oglasa je pokrenuta u pozadini.')
 
 
 @app.route('/admin/product', methods=['POST'])
