@@ -342,7 +342,8 @@ def synchronize(adapter, catalog=None, force=False, current_products=None):
     for ident in ordered:
         product=products.get(ident)
         binding=bindings.get(str(ident))
-        if not visible(product) and not (binding and binding.get('remote_id')):
+        recovering=bool(binding and (binding.get('create_attempt_started') or binding.get('status') in ('creating','uncertain')))
+        if not visible(product) and not (binding and binding.get('remote_id')) and not recovering:
             continue
         if binding and binding.get('next_attempt_at',0)>clock() and not force:
             continue
@@ -397,13 +398,21 @@ def synchronize(adapter, catalog=None, force=False, current_products=None):
                 if binding.get('create_attempt_started') or binding.get('status') in ('creating','uncertain'):
                     # An interrupted external POST must not result in a second ad.
                     finder=getattr(adapter,'find_existing',None)
-                    found=finder(payload(product,cfg)) if finder else None
+                    submitted=binding.get('submitted_payload')
+                    if not submitted and product:submitted=payload(product,cfg)
+                    found=finder(submitted) if finder and submitted else None
                     if found:
                         found_remote=str(found.get('remote_id',''))
                         if any(other is not binding and other.get('remote_id')==found_remote for other in bindings.values()):
                             raise ValueError('Recovered ad belongs to another product mapping.')
                         observe(binding,found)
-                        binding.update(fingerprint=wanted,images_fingerprint=images_fingerprint(product),last_synced_at=clock())
+                        # The recovered ad contains the submitted snapshot, which
+                        # may differ from edits made while its response was lost.
+                        binding.update(fingerprint=binding.get('submitted_fingerprint'),
+                                       images_fingerprint=binding.get('submitted_images_fingerprint'),
+                                       last_synced_at=clock())
+                        if not visible(current(ident)):
+                            observe(binding,adapter.deactivate(binding['remote_id'],binding.get('url')))
                     else:
                         binding['status']='uncertain'
                         binding['message']=LABELS['uncertain']
@@ -416,7 +425,9 @@ def synchronize(adapter, catalog=None, force=False, current_products=None):
                 if not visible(fresh) or fingerprint(fresh,cfg)!=wanted:
                     continue
                 creator=adapter.create  # Establish the authenticated session before checkpointing publication.
-                binding.update(status='creating',submitted_at=clock(),create_attempt_started=True)
+                binding.update(status='creating',submitted_at=clock(),create_attempt_started=True,
+                               submitted_payload=prepared,submitted_fingerprint=wanted,
+                               submitted_images_fingerprint=images_fingerprint(product))
                 atomic_json(ROOT/'state.json',data)
                 try:
                     observation=creator(prepared)

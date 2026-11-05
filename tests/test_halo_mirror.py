@@ -172,6 +172,27 @@ class HaloMirrorTests(unittest.TestCase):
         self.assertEqual([c[0] for c in self.browser.calls].count('create'),1)
         self.assertTrue(mirror.state()['bindings']['1']['create_attempt_started'])
 
+    def test_deleted_during_uncertain_submission_is_recovered_then_withdrawn(self):
+        self.browser.create_error=HaloSubmissionUncertain('Interrupted publication')
+        self.sync()
+        self.products.pop(1)
+        self.browser.found=self.browser.result()
+        self.sync(catalog={},force=True)
+        self.assertEqual([c[0] for c in self.browser.calls],['create','find_existing','deactivate'])
+        self.assertEqual(mirror.state()['bindings']['1']['status'],'paused')
+
+    def test_edits_during_uncertain_submission_are_not_falsely_marked_synced(self):
+        self.browser.create_error=HaloSubmissionUncertain('Interrupted publication')
+        self.sync();submitted_fingerprint=mirror.fingerprint(self.product)
+        self.product['price_cents']=18000
+        self.browser.found=self.browser.result()
+        self.sync(force=True)
+        self.assertEqual(mirror.state()['bindings']['1']['fingerprint'],submitted_fingerprint)
+        self.assertIsNone(mirror.public_listing(self.product))
+        self.sync(force=True)
+        self.assertIn(('update',self.browser.remote),self.browser.calls)
+        self.assertEqual([c[0] for c in self.browser.calls].count('create'),1)
+
     def test_hidden_during_existing_activation_is_withdrawn(self):
         self.binding('paused');self.browser.status='paused'
         original=self.browser.activate
