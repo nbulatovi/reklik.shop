@@ -246,6 +246,17 @@ class HaloOfflineUIFixtures(unittest.TestCase):
         self.client._remove_photos()
         self.assertEqual(self.client.page.locator('.uploaded-image-item').count(),0)
 
+    def test_saved_edit_waits_for_asynchronous_gallery_hydration(self):
+        source=payload();self.state.update(title=source['title'],body=source['description'])
+        self.client.page.set_content(self.edit_html())
+        self.client.page.evaluate('''()=>{
+            const photos=document.querySelector('#dropzone-previews');
+            const saved=photos.innerHTML;photos.innerHTML='';
+            setTimeout(()=>photos.innerHTML=saved,250);
+        }''')
+        self.client._verify_saved_edit(source)
+        self.assertEqual(self.client.page.locator('.uploaded-image-item').count(),1)
+
     def test_span_100_control_exposes_all_26_cards(self):
         cards=''.join(f'<div class="product-item">Tip Standardni {n}</div>' for n in range(20))
         script="for(let n=20;n<26;n++){let d=document.createElement('div');d.className='product-item';d.innerText='item '+n;document.body.appendChild(d)}"

@@ -622,6 +622,25 @@ class HaloBrowser:
                 or Decimal(self.page.locator('input[name=cena]').input_value().replace(',', '.')) != Decimal(payload['price_eur'])):
             raise HaloNeedsReview('form_did_not_retain_verified_item_and_contacts')
 
+    def _verify_saved_edit(self,payload):
+        # The title is server rendered, but the saved gallery/editor hydrate
+        # asynchronously. A visible title alone does not prove readback is ready.
+        deadline=time.monotonic()+20
+        failure='edited_photo_count_not_verified'
+        while True:
+            try:
+                self._verify_form(payload)
+                if self.page.locator('#dropzone-previews .uploaded-image-item:visible').count()==len(payload['photos']):
+                    return
+                failure='edited_photo_count_not_verified'
+            except HaloNeedsReview as error:
+                if str(error)!='form_did_not_retain_verified_item_and_contacts':
+                    raise
+                failure=str(error)
+            if time.monotonic()>=deadline:
+                raise HaloNeedsReview(failure)
+            self.page.wait_for_timeout(150)
+
     def _free_step(self, auto_renew=False):
         self._guard_origin()
         standard = self.page.locator('label[for=IsBought3]')
@@ -769,8 +788,6 @@ class HaloBrowser:
         self.page.goto(ORIGIN + '/izmeni-oglas/' + remote_id, wait_until='domcontentloaded', timeout=45000)
         self._guard_origin()
         self.page.locator('input[name=Title]').wait_for(state='visible', timeout=25000)
-        self._verify_form(payload)
-        if self.page.locator('#dropzone-previews .uploaded-image-item:visible').count() != len(payload['photos']):
-            raise HaloNeedsReview('edited_photo_count_not_verified')
+        self._verify_saved_edit(payload)
         self._profile_loaded = False
         return dict(after, fee_rsd=0)
