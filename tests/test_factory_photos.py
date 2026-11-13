@@ -97,6 +97,28 @@ class FactoryPhotoTests(unittest.TestCase):
         self.assertEqual(list(self.uploads.glob('*.webp')), [])
         with store.connect() as connection:self.assertEqual(connection.execute('SELECT count(*) FROM factory_photo_jobs').fetchone()[0], 0)
 
+    def test_explicit_reenable_starts_a_fresh_job_after_cancellation(self):
+        task = self.queue()
+        with store.connect(True) as connection:connection.execute('UPDATE products SET factory_photo_enabled=0 WHERE id=1')
+        photos.queue_product(1)
+        with store.connect(True) as connection:connection.execute('UPDATE products SET factory_photo_enabled=1 WHERE id=1')
+        next_task = self.queue()
+        self.assertNotEqual(next_task['token'], task['token'])
+        self.assertFalse(self.install(task))
+        self.assertTrue(self.install(next_task))
+
+    def test_missing_generated_file_is_repaired_by_background_tick(self):
+        task = self.queue();self.assertTrue(self.install(task))
+        (self.uploads/self.product()['factory_photo']).unlink()
+        self.worker.reset_mock()
+        photos.tick()
+        self.worker.assert_called_once()
+        with store.connect() as connection:
+            next_task = dict(connection.execute('SELECT * FROM factory_photo_jobs WHERE product_id=1').fetchone())
+        self.assertNotEqual(next_task['token'], task['token'])
+        self.assertTrue(self.install(next_task))
+        self.assertEqual(len(self.product()['images']), 2)
+
     def test_identity_race_and_old_token_cannot_install(self):
         task = self.queue()
         with store.connect(True) as connection:connection.execute("UPDATE products SET title='Dell Latitude 5490' WHERE id=1")
@@ -115,6 +137,17 @@ class FactoryPhotoTests(unittest.TestCase):
         self.assertNotEqual(photos.identity(before), photos.identity(after))
         after = copy.deepcopy(before); after['title'] = 'Dell Latitude 5490'
         self.assertNotEqual(photos.identity(before), photos.identity(after))
+
+    def test_identity_changes_for_replaced_first_real_photo_not_factory_or_extra_angles(self):
+        product = self.product();before = photos.identity(product)
+        product['images'].append('b'*24+'.webp')
+        self.assertEqual(photos.identity(product), before)
+        product['factory_photo'] = 'c'*24+'.webp';product['images'].insert(0,product['factory_photo'])
+        self.assertEqual(photos.identity(product), before)
+        raw = dict(product, images=json.dumps(product['images']))
+        self.assertEqual(photos.identity(raw), before)
+        product['images'].remove('a'*24+'.webp')
+        self.assertNotEqual(photos.identity(product), before)
 
     def test_completed_lookup_is_not_repeated_on_save_or_tick(self):
         task = self.queue(); self.assertTrue(self.install(task)); self.worker.reset_mock()
@@ -176,6 +209,17 @@ class FactoryPhotoTests(unittest.TestCase):
         with self.assertRaises(LookupError):photos._candidate(product, candidate, curated=True)
         candidate.update(color='',view='front')
         self.assertEqual(photos._candidate(product, candidate, curated=True)['view'], 'front')
+
+    def test_reviewed_color_is_scoped_to_exact_real_unit_photo(self):
+        product = dict(self.product(), title='Samsung Galaxy A14', brand='Samsung', category_slug='telefoni')
+        candidate = dict(self.candidate,model='Samsung Galaxy A14',view='front_back',color='purple',
+            page_url='https://www.samsung.com/galaxy-a14/',image_url='https://images.samsung.com/a14.png',
+            verified_unit_photo='a'*24+'.webp',verified_unit_color='purple')
+        self.assertEqual(photos._candidate(product,candidate,curated=True)['color'],'purple')
+        product['images']=['b'*24+'.webp']
+        with self.assertRaises(LookupError):photos._candidate(product,candidate,curated=True)
+        product['images']=['a'*24+'.webp'];product['specs']['Boja']='plava'
+        with self.assertRaises(LookupError):photos._candidate(product,candidate,curated=True)
 
     def test_https_domains_credentials_and_private_dns_are_checked(self):
         for url in ('http://i.dell.com/a.png','https://user:secret@i.dell.com/a.png','https://i.dell.com.evil.test/a.png',

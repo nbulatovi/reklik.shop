@@ -118,8 +118,13 @@ def known_color(product):
 
 def identity(product):
     """Ignore prices/spec enrichment, but invalidate model/explicit color changes."""
+    images = product.get('images', [])
+    if isinstance(images, str):
+        try:images = json.loads(images)
+        except ValueError:images = []
+    first_real = next((name for name in images if name != product.get('factory_photo', '')), '')
     data = {'brand': model_text(product.get('brand', '')), 'title': model_text(product.get('title', '')),
-            'color': known_color(product)}
+            'color': known_color(product), 'first_real_photo': first_real}
     return hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()
 
 
@@ -129,6 +134,7 @@ def _domain(host, domains):
 
 def safe_url(url, brand, image=False, check_dns=True):
     parsed = urlparse(str(url))
+    if not image:parsed = parsed._replace(fragment='')
     host = (parsed.hostname or '').lower()
     if parsed.scheme != 'https' or parsed.username or parsed.password or parsed.fragment or parsed.port not in (None, 443):
         raise ValueError('Invalid manufacturer URL')
@@ -136,6 +142,8 @@ def safe_url(url, brand, image=False, check_dns=True):
         raise ValueError('Unsupported manufacturer URL')
     if len(url) > 4000 or not host or parsed.path.lower().endswith(('.svg', '.svgz')):
         raise ValueError('Invalid manufacturer image URL')
+    if host == 'cdrt.github.io' and unquote(parsed.path) != '/mk_docs/img/guides/docks/twd1.png':
+        raise ValueError('Unsupported manufacturer CDN path')
     if check_dns:
         addresses = socket.getaddrinfo(host, 443, type=socket.SOCK_STREAM)
         if not addresses or any(not ipaddress.ip_address(address[4][0]).is_global for address in addresses):
@@ -149,7 +157,9 @@ def download(url, brand, image=True):
     with requests.Session() as session:
         started = time.monotonic()
         session.trust_env = False
-        session.headers.update({'User-Agent': 'ReKlik-ProductImages/1.0', 'Accept': 'image/*' if image else 'text/html,application/pdf'})
+        # Keep requests' truthful default User-Agent. Some manufacturer CDNs
+        # reject unknown/custom product-image crawler User-Agents outright.
+        session.headers.update({'Accept': 'image/*' if image else 'text/html,application/pdf'})
         for attempt in range(5):
             url = safe_url(url, brand, image=image)
             with session.get(url, stream=True, allow_redirects=False, timeout=(10, 35)) as response:
@@ -180,13 +190,28 @@ def _candidate(product, candidate, curated=False):
         raise LookupError('No exact manufacturer photo')
     model = model_text(candidate.get('model', ''))
     text = model_text(str(product.get('brand', '')) + ' ' + str(product.get('title', '')))
-    if not model or not any(char.isdigit() for char in model):raise ValueError('Precise model required')
+    if not model:raise ValueError('Precise model required')
+    if not curated and any(char.isdigit() for char in text) and not any(char.isdigit() for char in model):
+        raise ValueError('Precise numeric model required')
     if not curated and any(token not in text.split() for token in model.split()):
         raise ValueError('Manufacturer model does not match inventory')
     page = safe_url(candidate.get('page_url', ''), brand, check_dns=False)
     image = safe_url(candidate.get('image_url', ''), brand, image=True, check_dns=False)
     color = known_color({'title': candidate.get('color', ''), 'brand': ''})
     wanted = known_color(product)
+    # A curated match may be scoped to an operator-verified photograph of this
+    # individual inventory unit. It cannot be reused for a different item whose
+    # model is identical but whose actual color was never checked.
+    verified_photo = str(candidate.get('verified_unit_photo', ''))
+    verified_color = known_color({'title': candidate.get('verified_unit_color', ''), 'brand': ''})
+    images = product.get('images', [])
+    if isinstance(images, str):
+        try:images = json.loads(images)
+        except ValueError:images = []
+    if (curated and not wanted and verified_color and color == verified_color
+            and re.fullmatch(r'[a-f0-9]{24}\.webp', verified_photo)
+            and verified_photo in images and verified_photo != product.get('factory_photo')):
+        wanted = verified_color
     view = str(candidate.get('view', '')).lower()
     mobile = product.get('category_slug') in ('telefoni', 'tableti') or product.get('icon') in ('phone', 'tablet')
     if color and wanted and color != wanted:raise LookupError('Manufacturer color does not match inventory')
@@ -257,8 +282,12 @@ logos, banners, advertising text, watermarked images or photographs of a similar
 4G/5G and generation differences. Return the actual direct HTTPS raster image URL observed on the source
 page, never guess a URL. Source page must be on the manufacturer's official domain and must reference
 that image. Prefer one large front view at least 600px with neutral background. Avoid tiny thumbnails.
-If color is not known, use a color-neutral front/screen view showing no color-dependent back cover.
-If a photo shows a colored chassis, confirm it matches the known unit color, otherwise found=false.
+When the exact model has multiple factory color choices (especially phones), and unit color is unknown,
+use a color-neutral front/screen view showing no color-dependent back cover. If such a photo shows a
+colored chassis, confirm it matches the known unit color, otherwise found=false.
+For a laptop/media player/dock whose exact model has only one standard chassis color, that official
+standard-color photograph is an exact match even without a separate inventory color field. Prefer an
+angle that avoids a clearly different keyboard layout or unconfirmed bundled accessories.
 Do not infer RAM, storage, keyboard layout, ports, bundled accessories or a new condition from an image.
 Return exact_match=true only for this precise model. If uncertain, found=false, with empty URLs/model.
 Color should be an English basic color or empty for a genuinely neutral front view; view is front,
@@ -429,7 +458,7 @@ def queue_product(pid, force=False):
             return {'status': 'completed', 'message': MESSAGES['completed']}
         # Missing on-disk files or manually repaired metadata must not leave a
         # stale completed job preventing a future successful lookup.
-        if previous and previous['status'] == 'completed':force = True
+        if previous and previous['status'] in ('completed', 'cancelled'):force = True
         if product['factory_photo']:
             images = [name for name in product['images'] if name != product['factory_photo']]
             connection.execute("UPDATE products SET images=?,factory_photo='',factory_photo_identity='',factory_photo_source='',revision=revision+1 WHERE id=?", (json.dumps(images), pid))
