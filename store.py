@@ -132,6 +132,11 @@ def init_db():
           product_id INTEGER PRIMARY KEY REFERENCES products(id) ON DELETE CASCADE,
           job_id TEXT, status TEXT NOT NULL, baseline TEXT NOT NULL, fields TEXT NOT NULL,
           message TEXT NOT NULL DEFAULT '', updated_at INTEGER NOT NULL);
+        CREATE TABLE IF NOT EXISTS factory_photo_jobs(
+          product_id INTEGER PRIMARY KEY REFERENCES products(id) ON DELETE CASCADE,
+          token TEXT NOT NULL, identity TEXT NOT NULL, status TEXT NOT NULL,
+          attempts INTEGER NOT NULL DEFAULT 1, retry_at INTEGER NOT NULL DEFAULT 0,
+          message TEXT NOT NULL DEFAULT '', updated_at INTEGER NOT NULL);
         CREATE TABLE IF NOT EXISTS order_notifications(
           id INTEGER PRIMARY KEY, order_id TEXT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
           event TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', attempts INTEGER NOT NULL DEFAULT 0,
@@ -155,6 +160,12 @@ def init_db():
         product_columns = {row['name'] for row in c.execute('PRAGMA table_info(products)')}
         if 'ai_specs_enabled' not in product_columns:
             c.execute('ALTER TABLE products ADD COLUMN ai_specs_enabled INTEGER NOT NULL DEFAULT 0')
+        for name,definition in (
+            ('factory_photo_enabled','INTEGER NOT NULL DEFAULT 1'),
+            ('factory_photo','TEXT NOT NULL DEFAULT \'\''),
+            ('factory_photo_identity','TEXT NOT NULL DEFAULT \'\''),
+            ('factory_photo_source','TEXT NOT NULL DEFAULT \'\'')):
+            if name not in product_columns:c.execute('ALTER TABLE products ADD COLUMN '+name+' '+definition)
         if 'revision' not in product_columns:
             c.execute('ALTER TABLE products ADD COLUMN revision INTEGER NOT NULL DEFAULT 1')
         if 'base_price_cents' not in product_columns:
