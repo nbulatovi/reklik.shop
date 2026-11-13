@@ -2,7 +2,7 @@
 import io
 import json
 import unittest
-from unittest.mock import patch
+from urllib.parse import parse_qs, urlparse
 from PIL import Image
 import test_store as fixture
 import factory_photos
@@ -40,7 +40,7 @@ class FactoryPhotoUITests(unittest.TestCase):
     def test_delete_factory_button_preserves_real_photos_manual_specs_and_opt_out(self):
         csrf,p,factory=self.photographed()
         response=self.client.post('/admin/product',data=self.form(p,csrf,remove_factory_photo='yes'))
-        self.assertNotIn('error=',response.location)
+        self.assertFalse(parse_qs(urlparse(response.location).query).get('error'))
         after=store.product(p['id'],admin=True)
         self.assertEqual(after['images'],p['images'][1:])
         self.assertEqual(after['factory_photo_enabled'],0)
@@ -55,7 +55,7 @@ class FactoryPhotoUITests(unittest.TestCase):
     def test_unchecking_factory_keep_image_disables_automatic_readdition(self):
         csrf,p,factory=self.photographed()
         response=self.client.post('/admin/product',data=self.form(p,csrf,keep_images=p['images'][1:]))
-        self.assertNotIn('error=',response.location)
+        self.assertFalse(parse_qs(urlparse(response.location).query).get('error'))
         after=store.product(p['id'],admin=True)
         self.assertFalse(after['factory_photo_enabled'])
         self.assertNotIn(factory,after['images'])
@@ -63,7 +63,7 @@ class FactoryPhotoUITests(unittest.TestCase):
     def test_renaming_device_clears_stale_factory_but_keeps_real_photos(self):
         csrf,p,factory=self.photographed()
         response=self.client.post('/admin/product',data=self.form(p,csrf,title='Dell Latitude 5590'))
-        self.assertNotIn('error=',response.location)
+        self.assertFalse(parse_qs(urlparse(response.location).query).get('error'))
         after=store.product(p['id'],admin=True)
         self.assertEqual(after['images'],p['images'][1:])
         self.assertTrue(after['factory_photo_enabled'])
@@ -80,7 +80,7 @@ class FactoryPhotoUITests(unittest.TestCase):
         p=store.product(p['id'],admin=True)
         upload=io.BytesIO();Image.new('RGB',(80,60),'green').save(upload,'JPEG');upload.seek(0)
         response=self.client.post('/admin/product',data=self.form(p,csrf,keep_images=images[1:]+[factory],photos=(upload,'last.jpg')))
-        self.assertNotIn('error=',response.location)
+        self.assertFalse(parse_qs(urlparse(response.location).query).get('error'))
         after=store.product(p['id'],admin=True)
         self.assertEqual(len(after['images']),11)
         self.assertEqual(after['images'][0],factory)
@@ -101,7 +101,7 @@ class FactoryPhotoUITests(unittest.TestCase):
         csrf,p,factory=self.photographed()
         with store.connect(True) as c:c.execute('UPDATE products SET factory_photo_enabled=0 WHERE id=?',(p['id'],))
         response=self.client.post('/admin/product/'+str(p['id'])+'/duplicate',data={'csrf':csrf})
-        self.assertNotIn('error=',response.location)
+        self.assertFalse(parse_qs(urlparse(response.location).query).get('error'))
         new=next(item for item in store.products(admin=True) if item['title']==p['title'] and item['id']!=p['id'])
         self.assertFalse(new['factory_photo_enabled'])
         self.assertEqual(new['images'],p['images'])

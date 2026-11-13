@@ -659,7 +659,7 @@ def save_product():
                 raise ValueError('Fotografija nije ispravna. Koristite JPG, PNG ili WebP.')
         specs = inventory_rules.merge_missing(inventory_rules.parse_specs(f.get('specs','')),inventory_rules.description_specs(desc))
         brand=f.get('brand','').strip()[:80]
-        photo_identity_changed=bool(existing and identity(existing)!=identity(dict(existing,title=title,brand=brand,specs=specs,description=desc)))
+        photo_identity_changed=bool(existing and identity(existing)!=identity(dict(existing,title=title,brand=brand,specs=specs,description=desc,images=images)))
         if photo_identity_changed or not factory_enabled:
             images=[i for i in images if i!=factory_image]
         elif factory_image and factory_image in images:

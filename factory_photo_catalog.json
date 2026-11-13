@@ -1,0 +1,130 @@
+[
+  {
+    "brand": "Dell",
+    "model": "Latitude 3590",
+    "match_regex": "\\blatitude\\s+3590\\b",
+    "page_url": "https://www.dell.com/support/product-details/en-us/product/latitude-15-3590-laptop/overview",
+    "image_url": "https://i.dell.com/is/image/DellContent/content/dam/ss2/product-images/dell-client-products/notebooks/latitude-notebooks/13-3590/global-spi/notebooks-latitude-15-3590-relsize-relsize-ss-mtrc-de-at-500-ng.psd?fmt=jpg&wid=1600&qlt=90",
+    "notes": "Exact manufacturer model support-page product image, stock display/keyboard configurations may differ; actual unit photos follow."
+  },
+  {
+    "brand": "Dell",
+    "model": "Latitude 5590",
+    "match_regex": "\\blatitude\\s+5590\\b",
+    "page_url": "https://www.dell.com/support/product-details/en-us/product/latitude-15-5590-laptop/overview",
+    "image_url": "https://i.dell.com/is/image/DellContent/content/dam/ss2/product-images/dell-client-products/notebooks/latitude-notebooks/15-5590/global-spi/touch/notebooks-latitude-15-5590-t-relsize-500-ng.psd?fmt=jpg&wid=1600&qlt=90",
+    "notes": "Exact manufacturer model support-page product image, stock display/keyboard configurations may differ; actual unit photos follow."
+  },
+  {
+    "brand": "Dell",
+    "model": "Latitude 3490",
+    "match_regex": "\\blatitude\\s+3490\\b",
+    "page_url": "https://www.dell.com/support/product-details/en-us/product/latitude-14-3490-laptop/overview",
+    "image_url": "https://i.dell.com/is/image/DellContent/content/dam/ss2/product-images/dell-client-products/notebooks/latitude-notebooks/14-3490/global-spi/notebook-latitude-14-3490-t-relsize-500-ng.psd?fmt=jpg&wid=1600&qlt=90",
+    "notes": "Exact manufacturer model support-page product image, stock display/keyboard configurations may differ; actual unit photos follow."
+  },
+  {
+    "brand": "Dell",
+    "model": "Latitude 5490",
+    "match_regex": "\\blatitude\\s+5490\\b",
+    "page_url": "https://www.dell.com/support/product-details/en-us/product/latitude-14-5490-laptop/overview",
+    "image_url": "https://i.dell.com/is/image/DellContent/content/dam/ss2/product-images/dell-client-products/notebooks/latitude-notebooks/14-5490/non-touch/notebooks-latitude-14-5490-nt-relsize-500-ng.psd?fmt=jpg&wid=1600&qlt=90",
+    "notes": "Exact manufacturer model support-page product image, stock display/keyboard configurations may differ; actual unit photos follow."
+  },
+  {
+    "brand": "Dell",
+    "model": "Latitude 7490",
+    "match_regex": "\\blatitude\\s+7490\\b",
+    "page_url": "https://www.dell.com/support/product-details/en-us/product/latitude-14-7490-laptop/overview",
+    "image_url": "https://i.dell.com/is/image/DellContent/content/dam/ss2/product-images/dell-client-products/notebooks/latitude-notebooks/14-7490/touch/notebooks-latitude-14-7490t-relsize-500-ng.psd?fmt=jpg&wid=1600&qlt=90",
+    "notes": "Exact manufacturer model support-page product image, stock display/keyboard configurations may differ; actual unit photos follow."
+  },
+  {
+    "brand": "HP",
+    "model": "EliteBook 860 G10",
+    "match_regex": "\\belitebook\\s+860\\s+g10\\b",
+    "page_url": "https://jp.ext.hp.com/notebooks/business/elitebook_860_g10/",
+    "image_url": "https://jp.ext.hp.com/content/dam/jp-ext-hp-com/jp/ja/ec/notebooks/business/elitebook_860_g10/images/move2_full.webp",
+    "notes": "Official exact-model HP gallery rear-angle frame; avoids displaying a different keyboard layout. Real unit front/keyboard photos remain in gallery."
+  },
+  {
+    "brand": "HP",
+    "model": "EliteBook 860 G11",
+    "match_regex": "\\belitebook\\s+860\\s+g11\\b",
+    "page_url": "https://jp.ext.hp.com/notebooks/business/elitebook_860_g11/",
+    "image_url": "https://jp.ext.hp.com/content/dam/jp-ext-hp-com/jp/ja/ec/notebooks/business/elitebook_860_g11/images/move2_full.jpg",
+    "notes": "Official exact-model HP gallery rear-angle frame; avoids displaying a different keyboard layout. Real unit front/keyboard photos remain in gallery."
+  },
+  {
+    "brand": "HP",
+    "model": "EliteBook 8 G1i 16",
+    "match_regex": "\\belitebook\\s+8\\s+g1i\\s+16\\b",
+    "page_url": "https://jp.ext.hp.com/notebooks/business/elitebook_8_g1i_16/",
+    "image_url": "https://jp.ext.hp.com/content/dam/jp-ext-hp-com/jp/ja/ec/notebooks/business/elitebook_8_g1i_16/images/move2_full.jpg",
+    "notes": "Official exact-model HP gallery rear-angle frame; avoids displaying a different keyboard layout. Real unit front/keyboard photos remain in gallery."
+  },
+  {
+    "brand": "AOPEN",
+    "model": "DE6340",
+    "match_regex": "\\b(?:de6340|d6340)\\b",
+    "page_url": "https://www.aopen.com/rs_en/products_info/DE6340/",
+    "image_url": "https://www.aopen.com/uploads/product/1000/20220318132909.jpg",
+    "notes": "Exact DE6340 confirmed from actual unit manufacturer model plate (SKU20), despite shortened D6340 inventory title. Factory front photo matches chassis and front ports. Official image is 320x166; do not invent/upscale detail."
+  },
+  {
+    "brand": "Scala",
+    "model": "Media Player-Q",
+    "match_regex": "\\b(?:media\\s+player\\s+q|b396\\s+h04\\s+08\\s+0t2\\s+q)\\b",
+    "page_url": "https://www.scala.com/en/products/hardware/scala-media-player-q/",
+    "image_url": "https://scala.com/wp-content/uploads/2023/11/Scala_MPQ.png",
+    "notes": "Exact Media Player-Q from manufacturer page; chassis and rear connector positions match actual B396 unit. Do not use page hero DX_Thumbnail-1.jpg: it is a different model."
+  },
+  {
+    "brand": "Lenovo",
+    "model": "ThinkPad Thunderbolt 3 Dock Gen 2 DK1841",
+    "match_regex": "\\b(?:dk1841|40an(?:0135|0170|0230)?|thunderbolt\\s+3\\s+(?:workstation\\s+)?dock\\s+gen\\s+2)\\b",
+    "page_url": "https://docs.lenovocdrt.com/ref/docks/docks_main/#thinkpad-thunderbolt-3-workstation-dock-40an0170-40an0230-thinkpad-thunderbolt-3-dock-gen-2-40an0135",
+    "image_url": "https://cdrt.github.io/mk_docs/img/guides/docks/twd1.png",
+    "notes": "Official Lenovo Commercial Deployment Readiness Team documentation exact 40AN section links this factory photo and Lenovo support PD500265. Actual unit DK1841 back connectors match twd3 companion image. Photo shows dock only; no charger implied."
+  },
+  {
+    "brand": "Samsung",
+    "model": "Galaxy A12 SM-A127F",
+    "match_regex": "\\b(?:a127f|a127|galaxy\\s*a12)\\b",
+    "page_url": "https://www.samsung.com/es/support/model/SM-A127FZKVEUB/",
+    "image_url": "https://images.samsung.com/is/image/samsung/p6pim/es/sm-a127fzkveub/gallery/es-galaxy-a12-a125-365615-sm-a127fzkveub-503990964?$624_624_PNG$",
+    "view": "front",
+    "color": "",
+    "notes": "Official exactSM-A127F supportpage. Front-onlyneutralrender visuallyverified; noothercolorrear shown. Source600presetobserved; nativeasset1200downloadalsoverifiedHTTP200."
+  },
+  {
+    "brand": "Nokia",
+    "model": "G21",
+    "match_regex": "\\bnokia\\s*g\\s*21\\b",
+    "page_url": "https://www.hmd.com/en_int/nokia-g-21/specs",
+    "image_url": "https://cdn.sanity.io/images/nsyec4mj/production/a91ae443b272a282f0eeebe4adb722cd71214bf8-1865x4000.png",
+    "view": "front",
+    "color": "",
+    "notes": "Official HMDspecs embeddedgallery. Front-onlyneutralblackdisplayrender visuallyverified; no colorbackshown. OriginalPNG HTTP200."
+  },
+  {
+    "brand": "Honor",
+    "model": "70",
+    "match_regex": "\\bhonor\\s*70\\b(?!\\s*(?:pro|lite))",
+    "page_url": "https://www.honor.com/global/phones/honor-70/",
+    "image_url": "https://www-file.honor.com/content/dam/honor/global/products/smartphone/honor-70/productpage/imgs/cmf/cmf-black-front@2x.png",
+    "view": "front",
+    "color": "",
+    "notes": "Official HONOR70 globalpage embedsasset. Front-onlyangleblackedge/neutraldisplayrender visuallyverified.HTTP200PNG2506px; do not infer rearcolor."
+  },
+  {
+    "brand": "Samsung",
+    "model": "Galaxy A15 SM-A155",
+    "match_regex": "\\b(?:a155\\w*|galaxy\\s*a15)\\b(?!\\s*5g)",
+    "page_url": "https://www.samsung.com/es/support/model/SM-A155FZBDEUB/",
+    "image_url": "https://images.samsung.com/is/image/samsung/p6pim/es/sm-a155fzbdeub/gallery/es-galaxy-a15-sm-a155-sm-a155fzbdeub-539695442?$624_624_PNG$",
+    "view": "front_back",
+    "color": "blue",
+    "notes": "Official exactSM-A155 4G bluevariant. CurrentSKU12descriptionexplicitPlava boja. Front+blue rear; applyonlyifknownblue, notforunknowncolor orblueblackvariant. VisuallyverifiedHTTP200."
+  }
+]
