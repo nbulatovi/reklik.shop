@@ -125,6 +125,16 @@ def factory_photo_status(product_id):
         return {'status':'pending','message':'Fabričku fotografiju pronalazimo u pozadini.'}
 
 
+def delete_unused_photo(name):
+    if not re.fullmatch(r'[a-f0-9]{24}\.webp',name or ''):
+        return
+    with store.connect(True) as c:
+        if any(name in json.loads(row['images']) for row in c.execute('SELECT images FROM products')):
+            return
+        (store.UPLOADS/name).unlink(missing_ok=True)
+        (store.ORIGINALS/name.replace('.webp','.jpg')).unlink(missing_ok=True)
+
+
 @app.before_request
 def load_session():
     g.session = None
@@ -687,6 +697,8 @@ def save_product():
                 c.execute("UPDATE products SET factory_photo='',factory_photo_identity='',factory_photo_source='' WHERE id=?",(pid,))
             if not ai_enabled:
                 c.execute("UPDATE product_ai SET status='cancelled',retry_at=0,message='AI dopuna je isključena.',updated_at=? WHERE product_id=? AND status IN ('pending','failed')",(store.now(),pid))
+        if factory_image and factory_image not in images:
+            delete_unused_photo(factory_image)
         store.audit('product_saved', pid)
         import specifications
         identity_changed=not existing or existing['title']!=title or existing['brand']!=f.get('brand','').strip()[:80]

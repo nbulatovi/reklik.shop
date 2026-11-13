@@ -45,6 +45,8 @@ class FactoryPhotoUITests(unittest.TestCase):
         self.assertEqual(after['images'],p['images'][1:])
         self.assertEqual(after['factory_photo_enabled'],0)
         self.assertEqual(after['factory_photo'],'')
+        self.assertFalse((store.UPLOADS/factory).exists())
+        self.assertFalse((store.ORIGINALS/factory.replace('.webp','.jpg')).exists())
         for name in ('description','specs','price_cents','base_price_cents','quantity','condition'):
             self.assertEqual(after[name],p[name])
         factory_photos.queue_product(p['id'])
