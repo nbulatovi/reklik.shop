@@ -272,6 +272,32 @@ class HaloMirrorTests(unittest.TestCase):
         self.assertNotEqual(first,(self.root/'request').read_text())
         self.assertEqual(self.browser.calls,[])
 
+    def test_factory_stays_on_storefront_and_actual_photo_changes_update_same_ad(self):
+        from unittest.mock import Mock
+        from PIL import Image
+        manual='a'*24+'.webp';factory='b'*24+'.webp';extra='c'*24+'.webp'
+        for name in (manual,factory,extra):
+            Image.new('RGB',(10,10),'white').save(fixture.store.UPLOADS/name,'WEBP')
+        self.product['images']=[manual]
+        binding=self.binding()
+        binding['images_fingerprint']=mirror.images_fingerprint(self.product)
+        mirror.atomic_json(self.root/'state.json',{'version':1,'bindings':{'1':binding}})
+        self.product.update(images=[factory,manual],factory_photo=factory)
+        self.browser.update=Mock(wraps=self.browser.update)
+        self.sync()
+        self.browser.update.assert_not_called()
+        self.assertEqual([Path(path).name for path in mirror.payload(self.product,self.cfg)['photos']],[manual])
+        self.product['images']=[factory,manual,extra]
+        self.sync()
+        remote,payload=self.browser.update.call_args.args
+        self.assertEqual(remote,binding['remote_id'])
+        self.assertTrue(payload['replace_photos'])
+        self.assertEqual([Path(path).name for path in payload['photos']],[manual,extra])
+        self.product.update(images=[manual,extra],factory_photo='')
+        self.browser.update.reset_mock();self.sync()
+        self.browser.update.assert_not_called()
+        self.assertFalse(any(call[0]=='create' for call in self.browser.calls))
+
     def test_existing_mapping_import_cannot_reset_or_recreate_ads(self):
         import hashlib
         (self.root/'state.json').unlink()

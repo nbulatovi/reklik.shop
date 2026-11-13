@@ -39,7 +39,7 @@ def public_catalog(cfg=None):
     rows = []
     for p in store.products():
         rows.append({key: p[key] for key in ['id','title','brand','category_name','category_slug','condition','images','quantity','catalog_image']} |
-                    {'price_minor': p['price_cents'],'slug':str(p['id'])})
+                    {'price_minor': p['price_cents'],'slug':str(p['id']),'factory_photo':p.get('factory_photo','')})
     return {'currency': cfg['currency'], 'products': rows,
             'included_warranty_days':cfg['included_warranty_days'],
             'warranty_minor':cfg['warranty_eur_cents']}
@@ -145,7 +145,7 @@ def publish(push=True):
         if not (store.ROOT / '.git').exists():
             return {'pages': count, 'pushed': False}
         git('add','--','docs','assets','templates','app.py','store.py','payments.py','publisher.py',
-            'analytics.py','mail_bridge.py','correspondence.py','halo_mirror.py','halo_browser.py','ai_editor.py','editor_guard.mjs','specifications.py','specs_guard.mjs','addresses.py','runtime.py','domain.py','notifications.py','rates.py','inventory_rules.py','setup.py','requirements.txt','.gitignore','README.md','tests')
+            'analytics.py','mail_bridge.py','correspondence.py','halo_mirror.py','halo_browser.py','ai_editor.py','editor_guard.mjs','specifications.py','specs_guard.mjs','factory_photos.py','factory_photo_guard.mjs','factory_photo_catalog.json','addresses.py','runtime.py','domain.py','notifications.py','rates.py','inventory_rules.py','setup.py','requirements.txt','.gitignore','README.md','tests')
         changed = git('diff','--cached','--quiet',check=False).returncode != 0
         if changed:
             git('commit','-m','Update ReKlik storefront and catalog')

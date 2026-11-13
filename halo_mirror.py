@@ -119,6 +119,7 @@ def fingerprint(product, cfg=None):
     names = ('id','title','brand','category_id','category_slug','category_name','icon',
              'condition','price_cents','description','specs','images')
     facts = {key:product.get(key) for key in names}
+    facts['images']=marketplace_images(product)
     facts['contacts'] = {key:cfg.get(key) for key in ('phone','email','pickup_enabled')}
     return hashlib.sha256(json.dumps(facts,sort_keys=True,ensure_ascii=False,separators=(',',':')).encode()).hexdigest()
 
@@ -140,8 +141,13 @@ def public_listing(product):
     return {'url':url,'remote_id':binding['remote_id'],'status':'active'}
 
 
+def marketplace_images(product):
+    """Halo accepts photographs of the item; manufacturer illustrations stay on ReKlik."""
+    return [name for name in product.get('images',[]) if name!=product.get('factory_photo')]
+
+
 def images_fingerprint(product):
-    return hashlib.sha256(json.dumps(product.get('images',[]),ensure_ascii=False,separators=(',',':')).encode()).hexdigest()
+    return hashlib.sha256(json.dumps(marketplace_images(product),ensure_ascii=False,separators=(',',':')).encode()).hexdigest()
 
 
 def import_existing(legacy_path,observed_path):
@@ -261,7 +267,7 @@ def payload(product, cfg=None):
             content.append(clause)
     description=header+'\n'.join(content)+ending
     photos=[]
-    for name in product.get('images',[])[:20]:
+    for name in marketplace_images(product)[:20]:
         if not re.fullmatch(r'[a-f0-9]{24}\.webp',name):
             raise ValueError('Unexpected inventory photo name.')
         original=store.ORIGINALS/name.replace('.webp','.jpg')

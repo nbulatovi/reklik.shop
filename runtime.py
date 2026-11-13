@@ -16,10 +16,12 @@ def maintenance():
     import payments
     import publisher
     import specifications
+    import factory_photos
     last_backup = 0
     while True:
         try:
             specifications.retry_failed()
+            factory_photos.tick()
             if store.release_expired():
                 publisher.schedule()
             with store.connect() as c:
@@ -59,6 +61,8 @@ def server():
         c.execute("UPDATE jobs SET status='failed',output=output || ?,finished_at=? WHERE kind!='specifications' AND status IN ('running','queued')",('\nServer je ponovo pokrenut. Pokrenite izmenu ponovo ako je potrebno.',store.now()))
     import specifications
     specifications.recover()
+    import factory_photos
+    factory_photos.recover()
     import notifications
     threading.Thread(target=notifications.run,daemon=True,name='order-emails').start()
     import rates

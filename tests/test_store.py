@@ -47,10 +47,13 @@ class StoreTests(unittest.TestCase):
         self.client=web.app.test_client()
         self.publish=patch.object(web,'queue_publish');self.publish.start()
         self.ai_worker=patch.object(specifications.WORKERS,'submit');self.ai_worker.start()
+        import factory_photos
+        self.photo_worker=patch.object(factory_photos.WORKERS,'submit');self.photo_worker.start()
 
     def tearDown(self):
         self.publish.stop()
         self.ai_worker.stop()
+        self.photo_worker.stop()
 
     def hidden(self,body,name):
         match=re.search(r'name="'+re.escape(name)+r'" value="([^"]*)"',body)

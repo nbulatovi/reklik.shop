@@ -117,6 +117,14 @@ def halo_status(product_id):
         return fallback
 
 
+def factory_photo_status(product_id):
+    try:
+        from factory_photos import status
+        return status(product_id)
+    except Exception:
+        return {'status':'pending','message':'Fabričku fotografiju pronalazimo u pozadini.'}
+
+
 @app.before_request
 def load_session():
     g.session = None
@@ -179,7 +187,7 @@ def template_context():
     return {'cfg': cfg, 'categories': store.categories(), 'base': '', 'live': True, 'analytics_origin':'',
             'asset_version': str(max((store.ROOT/'assets/style.css').stat().st_mtime_ns,(store.ROOT/'assets/site.js').stat().st_mtime_ns)),
             'csrf': g.session['csrf'] if getattr(g, 'session', None) else '', 'condition_grades':inventory_rules.GRADES,
-            'halo_listing':halo_listing,'halo_status':halo_status,
+            'halo_listing':halo_listing,'halo_status':halo_status,'factory_photo_status':factory_photo_status,
             'money': lambda cents: store.display_money(cents,'EUR'),
             'minor_money': lambda cents: store.display_money(cents,'RSD'),
             'pricing_explanation': pricing_explanation,
@@ -613,12 +621,20 @@ def save_product():
         if not 1 <= base_cents <= 100000000 or not 0 <= quantity <= 10000:
             raise ValueError('Proverite cenu i količinu.')
         cents=store.list_price(base_cents)
-        images = [i for i in f.getlist('keep_images') if re.fullmatch(r'[a-f0-9]{24}\.webp', i) and (store.UPLOADS / i).is_file()]
+        pid = int(f.get('id') or 0)
+        existing = store.product(pid,admin=True) if pid else None
+        from factory_photos import identity
+        factory_image=existing.get('factory_photo','') if existing else ''
+        factory_enabled=int(f.get('factory_photo_enabled')=='yes') if f.get('factory_settings_present') else int(existing.get('factory_photo_enabled',1) if existing else 1)
+        kept=list(dict.fromkeys(i for i in f.getlist('keep_images') if re.fullmatch(r'[a-f0-9]{24}\.webp',i) and (store.UPLOADS/i).is_file()))
+        if f.get('remove_factory_photo')=='yes' or (factory_image and factory_image not in kept):
+            factory_enabled=0
+        images=[i for i in kept if i!=factory_image or factory_enabled]
         for upload in request.files.getlist('photos'):
             if not upload.filename:
                 continue
-            if len(images) >= 10:
-                raise ValueError('Najviše 10 fotografija po uređaju.')
+            if len([i for i in images if i!=factory_image]) >= 10:
+                raise ValueError('Najviše 10 vaših fotografija po uređaju, uz fabričku fotografiju.')
             try:
                 im = Image.open(upload.stream)
                 if im.width * im.height > 50000000:
@@ -632,12 +648,16 @@ def save_product():
             except (UnidentifiedImageError, OSError):
                 raise ValueError('Fotografija nije ispravna. Koristite JPG, PNG ili WebP.')
         specs = inventory_rules.merge_missing(inventory_rules.parse_specs(f.get('specs','')),inventory_rules.description_specs(desc))
+        brand=f.get('brand','').strip()[:80]
+        photo_identity_changed=bool(existing and identity(existing)!=identity(dict(existing,title=title,brand=brand,specs=specs,description=desc)))
+        if photo_identity_changed or not factory_enabled:
+            images=[i for i in images if i!=factory_image]
+        elif factory_image and factory_image in images:
+            images=[factory_image]+[i for i in images if i!=factory_image]
         weight = float(f.get('weight_kg') or 0)
         if not 0 <= weight <= 100:
             raise ValueError('Težina mora biti između 0 i 100 kg.')
         active = int(f.get('active') == 'yes')
-        pid = int(f.get('id') or 0)
-        existing = store.product(pid,admin=True) if pid else None
         if active and not images and not (existing and existing['catalog_image']):
             raise ValueError('Dodajte bar jednu stvarnu fotografiju pre objavljivanja uređaja.')
         pid = int(f.get('id') or 0)
@@ -662,7 +682,9 @@ def save_product():
                   specs,images,weight_kg,active,updated_at,created_at,slug) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
                   (pid,) + values + (store.now(), slug))
             ai_enabled=int(f.get('ai_specs_enabled')=='yes')
-            c.execute('UPDATE products SET base_price_cents=?,ai_specs_enabled=? WHERE id=?',(base_cents,ai_enabled,pid))
+            c.execute('UPDATE products SET base_price_cents=?,ai_specs_enabled=?,factory_photo_enabled=? WHERE id=?',(base_cents,ai_enabled,factory_enabled,pid))
+            if photo_identity_changed or not factory_enabled:
+                c.execute("UPDATE products SET factory_photo='',factory_photo_identity='',factory_photo_source='' WHERE id=?",(pid,))
             if not ai_enabled:
                 c.execute("UPDATE product_ai SET status='cancelled',retry_at=0,message='AI dopuna je isključena.',updated_at=? WHERE product_id=? AND status IN ('pending','failed')",(store.now(),pid))
         store.audit('product_saved', pid)
@@ -671,6 +693,8 @@ def save_product():
         enrich=ai_enabled and (identity_changed or not specs or (existing and (not existing['ai_specs_enabled'] or specs!=existing['specs'] or desc!=existing['description'])) or f.get('lookup_requested')=='1')
         if enrich:
             specifications.queue_product(pid,['specs'])
+        import factory_photos
+        factory_photos.queue_product(pid)
         queue_publish()
         return back_admin(message='Uređaj je sačuvan. AI u pozadini dodaje samo nedostajuće podatke; vaš unos ostaje sačuvan.' if enrich else 'Uređaj je sačuvan. Javne stranice se automatski objavljuju.')
     except (ValueError, KeyError, store.sqlite3.IntegrityError, ArithmeticError) as e:
@@ -714,6 +738,8 @@ def duplicate_product(pid):
                     active=int(bool(json.loads(data['images']) or data['catalog_image'])),ai_specs_enabled=0,revision=1,created_at=store.now(),updated_at=store.now())
         c.execute('INSERT INTO products('+','.join(data)+') VALUES('+','.join('?' for _ in data)+')',tuple(data.values()))
     store.audit('product_duplicated',new_id,'source='+str(pid))
+    import factory_photos
+    factory_photos.queue_product(new_id)
     queue_publish()
     return redirect(url_for('admin_dashboard',edit=new_id,message='Uređaj je dupliran sa količinom 1. Proverite podatke i fotografije.'))
 
