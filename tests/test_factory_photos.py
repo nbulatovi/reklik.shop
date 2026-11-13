@@ -244,6 +244,15 @@ class FactoryPhotoTests(unittest.TestCase):
         self.assertFalse(photos.page_references_image('<img src="/content/dam/model/main.jpg-wrong">',page,image))
         self.assertFalse(photos.page_references_image('<img src="/content/dam/model/main.jpg">',page,'https://images.hp.com/content/dam/model/main.jpg'))
 
+    def test_source_model_check_rejects_neighboring_generations_and_pro_variants(self):
+        self.assertTrue(photos.page_model_matches('<h1>HP EliteBook 860 G11</h1>','https://www.hp.com/model/','HP EliteBook 860 G11'))
+        self.assertFalse(photos.page_model_matches('<h1>HP EliteBook 860 G10</h1><footer>860 G11</footer>',
+            'https://www.hp.com/elitebook-860-g10/','HP EliteBook 860 G11'))
+        self.assertTrue(photos.page_model_matches('<title>Redmi Note 13 Pro+ 5G</title>',
+            'https://www.mi.com/product/','Redmi Note 13 Pro+ 5G'))
+        self.assertFalse(photos.page_model_matches('<title>Redmi Note 13 Pro 5G</title>',
+            'https://www.mi.com/product/','Redmi Note 13 Pro+ 5G'))
+
     def test_invalid_and_tiny_images_never_write_inventory(self):
         task = self.queue()
         for data in (b'<svg/>', b'not an image'):

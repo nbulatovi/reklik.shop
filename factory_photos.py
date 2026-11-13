@@ -249,6 +249,19 @@ def page_references_image(page, page_url, image_url):
                 re.search(r'[\"\'(=]\s*' + re.escape(image.path) + end, page))
 
 
+def page_model_matches(page, page_url, model):
+    """A neighboring generation in a footer is not an exact product source."""
+    headings = re.findall(r'<(?:title|h1)\b[^>]*>(.*?)</(?:title|h1)\s*>', page, re.I | re.S)
+    headings = ' '.join(re.sub(r'<[^>]*>', ' ', value) for value in headings)
+    text = model_text(html.unescape(headings) + ' ' + unquote(urlparse(page_url).path))
+    tokens = model_text(model).split()
+    numbers = [token for token in tokens if any(char.isdigit() for char in token)]
+    qualifiers = [token for token in tokens if token in ('pro', 'pro+', 'plus', 'ultra', 'max', 'mini', 'lite', '5g', '4g')]
+    required = numbers + qualifiers
+    if not required:required = [token for token in tokens if token not in MANUFACTURERS]
+    return bool(required) and all(token in text.split() for token in required)
+
+
 def research(product, token):
     """Web-only CLI: credentials and all other project data stay outside the jail."""
     from ai_editor import CODEX, NODE, sync_auth
@@ -324,6 +337,8 @@ Input: ''' + json.dumps({'brand': product.get('brand', ''), 'title': product['ti
     # A discovered URL must actually occur on the official source page. Decode
     # ordinary JSON/HTML escaping without executing supplier scripts.
     page = download(candidate['page_url'], manufacturer(product), image=False).decode('utf8', errors='replace')
+    if not page_model_matches(page, candidate['page_url'], candidate['model']):
+        raise ValueError('Manufacturer page does not identify the exact model')
     if not page_references_image(page, candidate['page_url'], candidate['image_url']):
         raise ValueError('Image was not found on manufacturer source page')
     return candidate
