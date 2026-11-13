@@ -237,6 +237,15 @@ class HaloOfflineUIFixtures(unittest.TestCase):
         self.assertEqual(result['remote_id'],ID);self.assertEqual(self.state['price'],'155')
         self.assertEqual(self.actions,['save']);self.assertIn('Ručna specifikacija',self.state['body'])
 
+    def test_photo_removal_does_not_skip_items_when_dom_indices_shift(self):
+        self.client.page.set_content('''<div id="dropzone-previews">
+          <div class="uploaded-image-item"><a class="btn-remove-image" onclick="this.parentNode.remove()">Remove one</a></div>
+          <div class="uploaded-image-item"><a class="btn-remove-image" onclick="this.parentNode.remove()">Remove two</a></div>
+          <div class="uploaded-image-item"><a class="btn-remove-image" onclick="this.parentNode.remove()">Remove three</a></div>
+          </div>''')
+        self.client._remove_photos()
+        self.assertEqual(self.client.page.locator('.uploaded-image-item').count(),0)
+
     def test_span_100_control_exposes_all_26_cards(self):
         cards=''.join(f'<div class="product-item">Tip Standardni {n}</div>' for n in range(20))
         script="for(let n=20;n<26;n++){let d=document.createElement('div');d.className='product-item';d.innerText='item '+n;document.body.appendChild(d)}"

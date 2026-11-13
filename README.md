@@ -23,7 +23,7 @@ Inventory saves queue an independent background photo lookup by exact model. `fa
 
 Admin can turn off automatic factory photos or delete the factory photo while saving. That choice survives retries, edits and PC restarts; re-enabling permits a fresh lookup. Up to ten actual unit photos fit alongside the factory photo. Replacing the model or the first actual photo invalidates the previous factory photo. The durable `factory_photo_jobs` table recovers interrupted work without delaying inventory entry.
 
-Halo Oglasi receives actual unit photographs only, in accordance with its photo rules. Manufacturer illustrations remain on ReKlik. Existing Halo ad IDs, free renewal and inventory synchronization are preserved.
+Halo Oglasi mirrors the same ordered gallery as ReKlik, including the optional first manufacturer photo. Ad text identifies the first image as a factory illustration and the remaining images as the actual device. Deleting the factory image in inventory removes it from the existing Halo ad during synchronization. Existing Halo ad IDs and free renewal are preserved.
 
 ## Private state
 

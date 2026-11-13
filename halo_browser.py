@@ -563,6 +563,15 @@ class HaloBrowser:
             raise HaloNeedsReview('ambiguous_ad_contact_email')
         return email
 
+    def _remove_photos(self):
+        buttons=self.page.locator('#dropzone-previews a.btn-remove-image:visible')
+        # Removing an item shifts subsequent locator indices; always remove the
+        # current first item instead of retaining a list of nth() locators.
+        for _ in range(20):
+            if not buttons.count():break
+            buttons.first.click()
+        self.page.wait_for_function("Array.from(document.querySelectorAll('#dropzone-previews .uploaded-image-item')).filter(e=>e.offsetWidth||e.offsetHeight).length === 0",timeout=20000)
+
     def _fill(self, payload, editing=False):
         self._guard_origin()
         replace_photos = not editing or payload.get('replace_photos', True)
@@ -589,9 +598,7 @@ class HaloBrowser:
             self.page.locator('.select2-result-selectable').filter(has_text=re.compile(r'^Beograd$')).first.click()
         if replace_photos:
             if editing:
-                for button in self.page.locator('#dropzone-previews a.btn-remove-image:visible').all():
-                    button.click()
-                self.page.wait_for_function("Array.from(document.querySelectorAll('#dropzone-previews .uploaded-image-item')).filter(e=>e.offsetWidth||e.offsetHeight).length === 0", timeout=20000)
+                self._remove_photos()
             self.page.locator('input[type=file]').set_input_files(photos, timeout=90000)
             self.page.wait_for_function('''count => {
               const nodes=Array.from(document.querySelectorAll('#dropzone-previews .uploaded-image-item'));

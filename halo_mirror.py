@@ -142,8 +142,8 @@ def public_listing(product):
 
 
 def marketplace_images(product):
-    """Halo accepts photographs of the item; manufacturer illustrations stay on ReKlik."""
-    return [name for name in product.get('images',[]) if name!=product.get('factory_photo')]
+    """Mirror the store gallery exactly, including its optional first factory image."""
+    return list(product.get('images',[]))
 
 
 def images_fingerprint(product):
@@ -252,6 +252,8 @@ def payload(product, cfg=None):
         ending += ' Lično preuzimanje po dogovoru.'
     ending += '\nOznaka uređaja: RK-'+str(ident)
     header = 'Stanje: '+product['condition']+'.\n\n'
+    if product.get('factory_photo') and product.get('images') and product['images'][0]==product['factory_photo']:
+        header+='Prva fotografija je fabrička fotografija modela. Ostale prikazuju uređaj koji kupujete.\n\n'
     content=[]
     for clause in critical:
         if len(header+'\n'.join(content+[clause])+ending)>1500:

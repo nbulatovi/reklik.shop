@@ -272,7 +272,7 @@ class HaloMirrorTests(unittest.TestCase):
         self.assertNotEqual(first,(self.root/'request').read_text())
         self.assertEqual(self.browser.calls,[])
 
-    def test_factory_stays_on_storefront_and_actual_photo_changes_update_same_ad(self):
+    def test_factory_first_gallery_changes_and_deletion_update_the_same_ad(self):
         from unittest.mock import Mock
         from PIL import Image
         manual='a'*24+'.webp';factory='b'*24+'.webp';extra='c'*24+'.webp'
@@ -285,17 +285,21 @@ class HaloMirrorTests(unittest.TestCase):
         self.product.update(images=[factory,manual],factory_photo=factory)
         self.browser.update=Mock(wraps=self.browser.update)
         self.sync()
-        self.browser.update.assert_not_called()
-        self.assertEqual([Path(path).name for path in mirror.payload(self.product,self.cfg)['photos']],[manual])
-        self.product['images']=[factory,manual,extra]
-        self.sync()
         remote,payload=self.browser.update.call_args.args
         self.assertEqual(remote,binding['remote_id'])
         self.assertTrue(payload['replace_photos'])
-        self.assertEqual([Path(path).name for path in payload['photos']],[manual,extra])
+        self.assertEqual([Path(path).name for path in payload['photos']],[factory,manual])
+        self.assertIn('Prva fotografija je fabrička fotografija modela.',payload['description'])
+        self.product['images']=[factory,manual,extra]
+        self.sync()
+        remote,payload=self.browser.update.call_args.args
+        self.assertEqual([Path(path).name for path in payload['photos']],[factory,manual,extra])
         self.product.update(images=[manual,extra],factory_photo='')
         self.browser.update.reset_mock();self.sync()
-        self.browser.update.assert_not_called()
+        remote,payload=self.browser.update.call_args.args
+        self.assertEqual(remote,binding['remote_id'])
+        self.assertEqual([Path(path).name for path in payload['photos']],[manual,extra])
+        self.assertNotIn('Prva fotografija je fabrička fotografija modela.',payload['description'])
         self.assertFalse(any(call[0]=='create' for call in self.browser.calls))
 
     def test_existing_mapping_import_cannot_reset_or_recreate_ads(self):
