@@ -60,6 +60,16 @@ class FactoryPhotoUITests(unittest.TestCase):
         self.assertFalse(after['factory_photo_enabled'])
         self.assertNotIn(factory,after['images'])
 
+    def test_removing_factory_photo_preserves_a_duplicates_shared_image(self):
+        csrf,p,factory=self.photographed()
+        self.client.post('/admin/product/'+str(p['id'])+'/duplicate',data={'csrf':csrf})
+        clone=next(item for item in store.products(admin=True) if item['title']==p['title'] and item['id']!=p['id'])
+        response=self.client.post('/admin/product',data=self.form(p,csrf,remove_factory_photo='yes'))
+        self.assertFalse(parse_qs(urlparse(response.location).query).get('error'))
+        self.assertTrue((store.UPLOADS/factory).is_file())
+        self.assertTrue((store.ORIGINALS/factory.replace('.webp','.jpg')).is_file())
+        self.assertEqual(store.product(clone['id'],admin=True)['images'][0],factory)
+
     def test_renaming_device_clears_stale_factory_but_keeps_real_photos(self):
         csrf,p,factory=self.photographed()
         response=self.client.post('/admin/product',data=self.form(p,csrf,title='Dell Latitude 5590'))
