@@ -706,7 +706,7 @@ def save_product():
         if enrich:
             specifications.queue_product(pid,['specs'])
         import factory_photos
-        factory_photos.queue_product(pid)
+        factory_photos.queue_product(pid,force=f.get('retry_factory_photo')=='yes')
         queue_publish()
         return back_admin(message='Uređaj je sačuvan. AI u pozadini dodaje samo nedostajuće podatke; vaš unos ostaje sačuvan.' if enrich else 'Uređaj je sačuvan. Javne stranice se automatski objavljuju.')
     except (ValueError, KeyError, store.sqlite3.IntegrityError, ArithmeticError) as e:
