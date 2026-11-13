@@ -196,5 +196,29 @@
     "notes": "CurrentSKU23blackactualfullrearphotovisuallymatched toofficialIndiaFusionBlackstockimage.Deviceonscreennamepartoffactoryscreenart. HTTP200originalPNG, noimageedits.",
     "verified_unit_photo": "7208fea5ae7639fd9852aba7.webp",
     "verified_unit_color": "black"
+  },
+  {
+    "brand": "Xiaomi",
+    "model": "Redmi Note 12 Pro 5G",
+    "match_regex": "\\bredmi\\s+note\\s*12\\s*pro\\s+5g\\b",
+    "page_url": "https://www.mi.com/global/product/redmi-note-12-pro-5g/",
+    "image_url": "https://i02.appmifile.com/433_operatorx_operatorx_xm/15/03/2023/a9db84468e4b77aeca5a66e1d02e2a7d.jpg",
+    "view": "back",
+    "color": "black",
+    "notes": "OfficialglobalcolourcarouselMidnightBlackimageindex1. Containsfactorybackcloseup+wholebackrenderonthe right; noadtext. SKU19 actualfullrearphoto visuallymatchesMidnightBlackglass, notpaleblueSkyBlue. HTTP200JPEG1336px.",
+    "verified_unit_photo": "9fda397f3b56163bb361dd2f.webp",
+    "verified_unit_color": "black"
+  },
+  {
+    "brand": "Xiaomi",
+    "model": "POCO X3 Pro",
+    "match_regex": "\\bpoco\\s+x3\\s+pro\\b",
+    "page_url": "https://www.mi.com/uk/product/poco-x3-pro/buy/",
+    "image_url": "https://i01.appmifile.com/v1/MI_18455B3E4DA706226CF7535A58E875F0267/pms_1617947330.95094339.png",
+    "view": "front_back",
+    "color": "Phantom Black",
+    "verified_unit_color": "Phantom Black",
+    "verified_unit_photo": "8dc6a7d6fc50afaaf2569df2.webp",
+    "notes": "Official Xiaomi UK page og:image and page_seo share_img_url. FactoryPhantomBlack darkgreyiridescent back visuallymatches actualSKU3rearphoto, includingcamera module,POCO stripe,blue/purple metallicreflections. Unitphoto retainsvisiblewear. Do not use schema.org imagepms_1617948133 which is blue variant."
   }
 ]
