@@ -51,7 +51,7 @@ MANUFACTURERS = {
     'huawei': ({'huawei.com'}, {'huawei.com'}),
     'honor': ({'honor.com', 'hihonor.com'}, {'honor.com', 'hihonor.com'}),
     'nokia': ({'hmd.com', 'hmdglobal.com', 'nokia.com'}, {'hmd.com', 'hmdglobal.com', 'nokia.com', 'images.ctfassets.net', 'cdn.sanity.io'}),
-    'zte': ({'ztedevices.com', 'zte.com.cn'}, {'ztedevices.com', 'zte.com.cn', 'ztedevices.com.cn'}),
+    'zte': ({'ztedevices.com', 'zte.com.cn','zteargentina.com.ar'}, {'ztedevices.com', 'zte.com.cn', 'ztedevices.com.cn','zteargentina.com.ar'}),
     'aopen': ({'aopen.com', 'aopen.jp'}, {'aopen.com', 'aopen.jp'}),
     'scala': ({'scala.com'}, {'scala.com'}),
     'apple': ({'apple.com'}, {'apple.com', 'mzstatic.com'}),
@@ -140,6 +140,12 @@ def safe_url(url, brand, image=False, check_dns=True):
         raise ValueError('Invalid manufacturer URL')
     if brand not in MANUFACTURERS or not _domain(host, MANUFACTURERS[brand][bool(image)]):
         raise ValueError('Unsupported manufacturer URL')
+    # Verified regional ZTE manufacturing partner; permit only the reviewed
+    # exact model page/image, rather than treating other regional content as a source.
+    if host=='zteargentina.com.ar':
+        allowed='/expo/img/zte/zte-blade-a54/Prod.png' if image else '/expo/zte-blade-a54/index.html'
+        if parsed.path!=allowed:
+            raise ValueError('Unverified regional manufacturer asset')
     if len(url) > 4000 or not host or parsed.path.lower().endswith(('.svg', '.svgz')):
         raise ValueError('Invalid manufacturer image URL')
     if host == 'cdrt.github.io' and unquote(parsed.path) != '/mk_docs/img/guides/docks/twd1.png':

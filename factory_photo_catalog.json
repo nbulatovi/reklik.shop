@@ -220,5 +220,14 @@
     "verified_unit_color": "Phantom Black",
     "verified_unit_photo": "8dc6a7d6fc50afaaf2569df2.webp",
     "notes": "Official Xiaomi UK page og:image and page_seo share_img_url. FactoryPhantomBlack darkgreyiridescent back visuallymatches actualSKU3rearphoto, includingcamera module,POCO stripe,blue/purple metallicreflections. Unitphoto retainsvisiblewear. Do not use schema.org imagepms_1617948133 which is blue variant."
+  },
+  {
+    "brand": "ZTE",
+    "model": "Blade A54",
+    "match_regex": "\\bblade\\s+a54\\b",
+    "page_url": "https://zteargentina.com.ar/expo/zte-blade-a54/index.html",
+    "image_url": "https://zteargentina.com.ar/expo/img/zte/zte-blade-a54/Prod.png",
+    "view": "front",
+    "notes": "Neutral straight-on factory front, black bezel, no colored back or accessories. Exact regional ZTE manufacturer site operated by Radio Victoria Argentina; About page https://zteargentina.com.ar/sobrezte documents ZTE manufacturing/commercial partnership. Page explicitly lists Blade A54 and Gray; actualSKU18darkgrayrear matches. Do not use globalDEfront.png because it includes purpleback. Product PNG contains transparent layout padding; preserve transparency/whitebackground, can mechanically trim onlytransparentborders if worker supports it."
   }
 ]

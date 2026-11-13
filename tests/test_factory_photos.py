@@ -253,6 +253,14 @@ class FactoryPhotoTests(unittest.TestCase):
         self.assertFalse(photos.page_model_matches('<title>Redmi Note 13 Pro 5G</title>',
             'https://www.mi.com/product/','Redmi Note 13 Pro+ 5G'))
 
+    def test_reviewed_zte_regional_source_is_limited_to_exact_page_and_asset(self):
+        page='https://zteargentina.com.ar/expo/zte-blade-a54/index.html'
+        image='https://zteargentina.com.ar/expo/img/zte/zte-blade-a54/Prod.png'
+        self.assertEqual(photos.safe_url(page,'zte',check_dns=False),page)
+        self.assertEqual(photos.safe_url(image,'zte',image=True,check_dns=False),image)
+        for url,is_image in (('https://zteargentina.com.ar/other',False),('https://zteargentina.com.ar/other.png',True)):
+            with self.assertRaises(ValueError):photos.safe_url(url,'zte',image=is_image,check_dns=False)
+
     def test_invalid_and_tiny_images_never_write_inventory(self):
         task = self.queue()
         for data in (b'<svg/>', b'not an image'):
