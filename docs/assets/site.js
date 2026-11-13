@@ -34,6 +34,7 @@
       const src=full[position]||urls[position];$('[data-gallery-image]',gallery).src=urls[position];
       $('[data-gallery-image]',gallery).alt=document.querySelector('h1').textContent+' — fotografija '+(position+1);
       $('[data-gallery-position]',gallery).textContent=(position+1)+' / '+urls.length;
+      const kind=$('[data-gallery-kind]',gallery);if(kind){kind.hidden=Number(gallery.dataset.factoryPhotoIndex)<0;kind.textContent=position===Number(gallery.dataset.factoryPhotoIndex)?'Fotografija proizvođača':'Fotografija uređaja';}
       $('[data-open-zoom]',gallery).href=src;
       $$('[data-gallery-go]',gallery).forEach(b=>b.setAttribute('aria-pressed',String(Number(b.dataset.galleryGo)===position)));
       if(dialog?.open){zoom.src=src;$('[data-zoom-original]').href=src;$('[data-zoom-position]').textContent=(position+1)+' / '+urls.length;scroller.scrollTo(0,0);}
@@ -206,9 +207,9 @@
     const upload=node('input',{type:'file',name:'photos',multiple:'',hidden:'','data-staged-photos':''});
     photoForm.append(upload);inputs.forEach(input=>input.removeAttribute('name'));
     const photos=[];let pending=0;
-    const kept=()=>$$('[name=keep_images]:checked',photoForm).length;
+    const kept=()=>$$('[name=keep_images]:checked',photoForm).filter(input=>!input.hasAttribute('data-factory-photo')).length;
     const sync=()=>{const transfer=new DataTransfer();photos.forEach(p=>transfer.items.add(p.file));upload.files=transfer.files;};
-    const count=()=>{const total=kept()+photos.length;status.textContent=pending?'Pripremamo fotografije…':total+' / 10 fotografija.'+(total<10?' Možete snimiti još.':' Uklonite neku da dodate novu.');};
+    const count=()=>{const total=kept()+photos.length;status.textContent=pending?'Pripremamo fotografije…':total+' / 10 vaših fotografija.'+(total<10?' Možete snimiti još.':' Uklonite neku da dodate novu.');};
     const add=async files=>{
       pending++;photoForm.dataset.photosBusy='1';count();
       try{
@@ -226,7 +227,7 @@
       }finally{pending--;if(!pending)delete photoForm.dataset.photosBusy;count();}
     };
     let queue=Promise.resolve();inputs.forEach(input=>input.addEventListener('change',()=>{const files=[...input.files];input.value='';queue=queue.then(()=>add(files)).catch(()=>{status.textContent='Fotografija nije dodata. Pokušajte ponovo.';});}));
-    $$('[name=keep_images]',photoForm).forEach(input=>input.addEventListener('change',count));
+    $$('[name=keep_images]',photoForm).forEach(input=>input.addEventListener('change',()=>{if(input.hasAttribute('data-factory-photo')&&!input.checked){const enabled=$('[name=factory_photo_enabled]',photoForm);if(enabled)enabled.checked=false;}count();}));
     photoForm.addEventListener('submit',event=>{if(pending){event.preventDefault();status.textContent='Sačekajte pripremu fotografija pre čuvanja.';}});
     if(navigator.mediaDevices?.getUserMedia){
       const open=$('[data-open-camera]'),panel=$('[data-camera-panel]'),video=$('[data-camera-video]'),capture=$('[data-capture-photo]'),cameraStatus=$('[data-camera-status]');

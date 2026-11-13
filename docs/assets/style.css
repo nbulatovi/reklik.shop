@@ -248,3 +248,12 @@ body p{font-size:16px!important;line-height:1.7}body small{font-size:14px!import
 .inventory-halo>span{min-width:0;max-width:100%}.inventory-halo>a{display:inline-flex;align-items:center;min-height:44px;color:#984100;font-size:15px;font-weight:600;text-decoration:underline;text-underline-offset:3px}
 .inventory-halo .inventory-halo-error{flex-basis:100%;margin:0;color:#a32720;font-size:15px;line-height:1.45;overflow-wrap:anywhere}
 .inventory-halo-sync{margin:0 0 16px}.inventory-halo-sync .button{width:100%;min-height:48px;font-size:16px!important;line-height:1.4;white-space:normal}.inventory-halo-sync p{margin:7px 0 0;font-size:15px;line-height:1.45}
+
+/* Factory images stay distinct from photographs of the individual device. */
+.gallery-photo-kind{position:absolute;left:8px;top:8px;max-width:calc(100% - 16px);padding:3px 8px;border-radius:5px;background:#fffffff0;color:#51483f;font-size:14px;line-height:1.4;pointer-events:none}
+.inventory-factory-choice{margin:10px 0 16px;padding:12px;border:1px solid #e8dfd6;border-radius:8px;background:#fffaf5}
+.inventory-factory-choice .check-field{display:flex;align-items:flex-start;gap:10px;font-size:16px;line-height:1.45}
+.inventory-factory-choice p{margin-top:7px;font-size:15px!important;line-height:1.45!important}
+.inventory-factory-choice .button{margin-top:10px;min-height:44px;font-size:16px;white-space:normal}
+.photo-preview label:has([data-factory-photo]){display:flex;flex-wrap:wrap;align-items:center;gap:5px;max-width:160px}
+.photo-preview label span{display:block;width:100%;font-size:14px;line-height:1.35}
