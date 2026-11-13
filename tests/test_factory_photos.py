@@ -229,6 +229,20 @@ class FactoryPhotoTests(unittest.TestCase):
             with self.assertRaises(ValueError):photos.safe_url('https://i.dell.com/a.png','dell', image=True)
         with patch.object(photos.socket,'getaddrinfo',return_value=[(2,1,6,'',('93.184.216.34',443))]):
             self.assertEqual(photos.safe_url('https://i.dell.com/a.png','dell', image=True),'https://i.dell.com/a.png')
+        self.assertEqual(photos.safe_url('https://docs.lenovocdrt.com/ref/docks/#40an','lenovo',check_dns=False),
+                         'https://docs.lenovocdrt.com/ref/docks/')
+        with self.assertRaises(ValueError):photos.safe_url('https://cdrt.github.io/unreviewed.png','lenovo',image=True,check_dns=False)
+
+    def test_official_page_image_provenance_accepts_relative_and_escaped_urls(self):
+        page='https://www.hp.com/product/model/'
+        image='https://www.hp.com/content/dam/model/main.jpg?width=1600'
+        for html in ('<img src="/content/dam/model/main.jpg">',
+                     '<meta content="https://www.hp.com/content/dam/model/main.jpg">',
+                     '<img src="//www.hp.com/content/dam/model/main.jpg?width=800">',
+                     '<div data-image="&#34;https:\\/\\/www.hp.com\\/content\\/dam\\/model\\/main.jpg&#34;">'):
+            self.assertTrue(photos.page_references_image(html,page,image),html)
+        self.assertFalse(photos.page_references_image('<img src="/content/dam/model/main.jpg-wrong">',page,image))
+        self.assertFalse(photos.page_references_image('<img src="/content/dam/model/main.jpg">',page,'https://images.hp.com/content/dam/model/main.jpg'))
 
     def test_invalid_and_tiny_images_never_write_inventory(self):
         task = self.queue()

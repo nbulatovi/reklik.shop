@@ -45,7 +45,7 @@ MESSAGES = {
 MANUFACTURERS = {
     'dell': ({'dell.com', 'delltechnologies.com'}, {'dell.com'}),
     'hp': ({'hp.com', 'hpe.com'}, {'hp.com', 'hp.widen.net', 'ssl-product-images.www8-hp.com'}),
-    'lenovo': ({'lenovo.com', 'docs.lenovocdrt.com'}, {'lenovo.com', 'p1-ofp.static.pub', 'p2-ofp.static.pub', 'p3-ofp.static.pub', 'cdrt.github.io'}),
+    'lenovo': ({'lenovo.com', 'docs.lenovocdrt.com'}, {'lenovo.com', 'docs.lenovocdrt.com', 'p1-ofp.static.pub', 'p2-ofp.static.pub', 'p3-ofp.static.pub', 'cdrt.github.io'}),
     'samsung': ({'samsung.com'}, {'samsung.com'}),
     'xiaomi': ({'mi.com', 'po.co', 'poco.net'}, {'mi.com', 'appmifile.com', 'mi-img.com', 'po.co', 'poco.net'}),
     'huawei': ({'huawei.com'}, {'huawei.com'}),
@@ -236,6 +236,19 @@ def curated_candidates(product):
     return result
 
 
+def page_references_image(page, page_url, image_url):
+    """Check actual declared URLs, including escaped or relative image paths."""
+    page = html.unescape(unquote(page.replace('\\/', '/').replace('\\u002F', '/').replace('\\u0026', '&')))
+    reference = unquote(image_url).split('?', 1)[0]
+    image = urlparse(reference)
+    source = urlparse(page_url)
+    end = r'(?:[?\"\')\s<>]|$)'
+    for variant in (reference, '//' + image.netloc + image.path):
+        if re.search(r'[\"\'(=\s]\s*' + re.escape(variant) + end, page):return True
+    return bool(image.hostname == source.hostname and
+                re.search(r'[\"\'(=]\s*' + re.escape(image.path) + end, page))
+
+
 def research(product, token):
     """Web-only CLI: credentials and all other project data stay outside the jail."""
     from ai_editor import CODEX, NODE, sync_auth
@@ -311,9 +324,8 @@ Input: ''' + json.dumps({'brand': product.get('brand', ''), 'title': product['ti
     # A discovered URL must actually occur on the official source page. Decode
     # ordinary JSON/HTML escaping without executing supplier scripts.
     page = download(candidate['page_url'], manufacturer(product), image=False).decode('utf8', errors='replace')
-    page = html.unescape(unquote(page.replace('\\/', '/').replace('\\u002F', '/').replace('\\u0026', '&')))
-    reference = unquote(candidate['image_url']).split('?', 1)[0]
-    if reference not in page:raise ValueError('Image was not found on manufacturer source page')
+    if not page_references_image(page, candidate['page_url'], candidate['image_url']):
+        raise ValueError('Image was not found on manufacturer source page')
     return candidate
 
 
