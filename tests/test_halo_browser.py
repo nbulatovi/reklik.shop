@@ -257,6 +257,15 @@ class HaloOfflineUIFixtures(unittest.TestCase):
         self.client._verify_saved_edit(source)
         self.assertEqual(self.client.page.locator('.uploaded-image-item').count(),1)
 
+    def test_saved_edit_refreshes_stale_readback_without_resubmitting(self):
+        source=payload();self.state.update(title=source['title'],body='Previous cached body')
+        self.client.page.goto(halo.ORIGIN+'/izmeni-oglas/'+ID)
+        self.state['body']=source['description']
+        before=list(self.actions)
+        self.client._verify_saved_edit(source,refresh=True)
+        self.assertEqual(self.actions,before)
+        self.assertEqual(halo.plain_text(self.client.page.locator('textarea').input_value()),halo.plain_text(source['description']))
+
     def test_span_100_control_exposes_all_26_cards(self):
         cards=''.join(f'<div class="product-item">Tip Standardni {n}</div>' for n in range(20))
         script="for(let n=20;n<26;n++){let d=document.createElement('div');d.className='product-item';d.innerText='item '+n;document.body.appendChild(d)}"

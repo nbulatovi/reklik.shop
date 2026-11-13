@@ -622,10 +622,11 @@ class HaloBrowser:
                 or Decimal(self.page.locator('input[name=cena]').input_value().replace(',', '.')) != Decimal(payload['price_eur'])):
             raise HaloNeedsReview('form_did_not_retain_verified_item_and_contacts')
 
-    def _verify_saved_edit(self,payload):
+    def _verify_saved_edit(self,payload,refresh=False):
         # The title is server rendered, but the saved gallery/editor hydrate
         # asynchronously. A visible title alone does not prove readback is ready.
         deadline=time.monotonic()+20
+        next_refresh=time.monotonic()+2
         failure='edited_photo_count_not_verified'
         while True:
             try:
@@ -639,6 +640,12 @@ class HaloBrowser:
                 failure=str(error)
             if time.monotonic()>=deadline:
                 raise HaloNeedsReview(failure)
+            if refresh and time.monotonic()>=next_refresh:
+                # A just-saved edit may initially return the previous cached
+                # form. Reload the readback only; never submit the edit again.
+                self.page.reload(wait_until='domcontentloaded',timeout=min(10000,max(1,int((deadline-time.monotonic())*1000))))
+                self._guard_origin()
+                next_refresh=time.monotonic()+2
             self.page.wait_for_timeout(150)
 
     def _free_step(self, auto_renew=False):
@@ -788,6 +795,6 @@ class HaloBrowser:
         self.page.goto(ORIGIN + '/izmeni-oglas/' + remote_id, wait_until='domcontentloaded', timeout=45000)
         self._guard_origin()
         self.page.locator('input[name=Title]').wait_for(state='visible', timeout=25000)
-        self._verify_saved_edit(payload)
+        self._verify_saved_edit(payload,refresh=True)
         self._profile_loaded = False
         return dict(after, fee_rsd=0)
