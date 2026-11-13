@@ -121,10 +121,56 @@
     "brand": "Samsung",
     "model": "Galaxy A15 SM-A155",
     "match_regex": "\\b(?:a155\\w*|galaxy\\s*a15)\\b(?!\\s*5g)",
-    "page_url": "https://www.samsung.com/es/support/model/SM-A155FZBDEUB/",
-    "image_url": "https://images.samsung.com/is/image/samsung/p6pim/es/sm-a155fzbdeub/gallery/es-galaxy-a15-sm-a155-sm-a155fzbdeub-539695442?$624_624_PNG$",
+    "page_url": "https://searchapi.samsung.com/v6/front/b2c/product/card/detail/global?siteCode=es&modelList=SM-A155FZBDEUB&saleSkuYN=N&onlyRequestSkuYN=N&keySummaryYN=N&keySpecYN=N&quicklookYN=Y",
+    "image_url": "https://images.samsung.com/is/image/samsung/p6pim/es/sm-a155fzbdeub/gallery/es-galaxy-a15-sm-a155-sm-a155fzbdeub-539695425?$650_519_PNG$",
+    "view": "front",
+    "color": "",
+    "notes": "Official galleryAPI fromSamsungpublicproductapplication (endpointobservedinmanufacturerJS). ExactSM-A155 galleryImageLarge[0], front-onlyneutraldisplay/blackbezel. VisuallyverifiedHTTP200650x519. Productpage https://www.samsung.com/es/support/model/SM-A155FZBDEUB/ ."
+  },
+  {
+    "brand": "Samsung",
+    "model": "Galaxy A14 SM-A145",
+    "match_regex": "\\b(?:a145\\w*|galaxy\\s*a14)\\b(?!\\s*5g)",
+    "page_url": "https://searchapi.samsung.com/v6/front/b2c/product/card/detail/global?siteCode=es&modelList=SM-A145RZKVEUB&saleSkuYN=N&onlyRequestSkuYN=N&keySummaryYN=N&keySpecYN=N&quicklookYN=Y",
+    "image_url": "https://images.samsung.com/is/image/samsung/p6pim/es/sm-a145rzkveub/gallery/es-galaxy-a14-sm-a145-sm-a145rzkveub-535606137?$650_519_PNG$",
+    "view": "front",
+    "color": "",
+    "notes": "ExactSM-A145 officialgalleryAPI front2 imageLarge[0]. Frontonlyneutralblackdisplaybezel, noothercolourrear. Currentownerpurplecovernotshown. Productpage https://www.samsung.com/es/support/model/SM-A145RZKVEUB/ ."
+  },
+  {
+    "brand": "Huawei",
+    "model": "Pura 70 Pro",
+    "match_regex": "\\bhuawei\\s+pura\\s*70\\s*pro\\b(?!\\s*(?:\\+|plus|ultra))",
+    "page_url": "https://consumer.huawei.com/om/phones/pura70-pro/specs/",
+    "image_url": "https://consumer.huawei.com/dam/content/dam/huawei-cbg-site/common/mkt/pdp/admin-image/phones/pura70-pro/specs-black.png",
+    "view": "back",
+    "color": "black",
+    "notes": "OfficialOman exactmodel specs image. ActualSKU2rearphotovisuallyverified blacktexturedcase match. Nootherspecsmodified. HTTP200PNG800px.",
+    "verified_unit_photo": "ac1dbc61add0f3ebe771fec4.webp",
+    "verified_unit_color": "black"
+  },
+  {
+    "brand": "Huawei",
+    "model": "nova 10",
+    "match_regex": "\\bhuawei\\s+nova\\s*10\\b(?!\\s*(?:pro|se))",
+    "page_url": "https://consumer.huawei.com/jo/phones/nova10/specs/",
+    "image_url": "https://consumer.huawei.com/dam/content/dam/huawei-cbg-site/common/mkt/pdp/admin-image/phones/nova10/specs/starry-silver.png",
+    "view": "back",
+    "color": "silver",
+    "notes": "OfficialJordan exactmodel specs image. ActualSKU13 fullrearphotovisuallyverified StarrySilver withgoldcamera ring. HTTP200PNG600px.",
+    "verified_unit_photo": "5ab849daee63218cd6fd1b7a.webp",
+    "verified_unit_color": "silver"
+  },
+  {
+    "brand": "Xiaomi",
+    "model": "Redmi 13C",
+    "match_regex": "\\bredmi\\s*13c\\b(?!\\s*5g)",
+    "page_url": "https://www.mi.com/uk/product/redmi-13c/buy/",
+    "image_url": "https://i05.appmifile.com/153_item_uk/27/12/2023/ede5e424183d8c677141954999adb24e.png",
     "view": "front_back",
-    "color": "blue",
-    "notes": "Official exactSM-A155 4G bluevariant. CurrentSKU12descriptionexplicitPlava boja. Front+blue rear; applyonlyifknownblue, notforunknowncolor orblueblackvariant. VisuallyverifiedHTTP200."
+    "color": "black",
+    "notes": "OfficialUKstructuredProductimage exactRedmi13C4G MidnightBlack. ActualSKU8 rearphoto confirmsblacktexturedcase and50MPtriplecamera. HTTP200PNG1600px.",
+    "verified_unit_photo": "2316dc38e020200f42cc0d46.webp",
+    "verified_unit_color": "black"
   }
 ]

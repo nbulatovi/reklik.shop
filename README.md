@@ -17,6 +17,14 @@ journalctl --user -u reklik-server -u reklik-tunnel -n 80
 /home/bg/.local/state/reklik/venv/bin/python publisher.py
 ```
 
+## Manufacturer photographs
+
+Inventory saves queue an independent background photo lookup by exact model. `factory_photos.py` uses verified official sources in `factory_photo_catalog.json`, then isolated web research for other devices. Photos are downloaded locally with full JPEG originals and WebP previews, placed first, and labeled as manufacturer photos. Actual unit photos and manual specifications remain intact. Color-specific stock images require a confirmed unit color or a verified attached unit photo.
+
+Admin can turn off automatic factory photos or delete the factory photo while saving. That choice survives retries, edits and PC restarts; re-enabling permits a fresh lookup. Up to ten actual unit photos fit alongside the factory photo. Replacing the model or the first actual photo invalidates the previous factory photo. The durable `factory_photo_jobs` table recovers interrupted work without delaying inventory entry.
+
+Halo Oglasi receives actual unit photographs only, in accordance with its photo rules. Manufacturer illustrations remain on ReKlik. Existing Halo ad IDs, free renewal and inventory synchronization are preserved.
+
 ## Private state
 
 All live state is outside the repository in `~/.local/state/reklik/`:
