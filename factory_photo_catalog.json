@@ -172,5 +172,29 @@
     "notes": "OfficialUKstructuredProductimage exactRedmi13C4G MidnightBlack. ActualSKU8 rearphoto confirmsblacktexturedcase and50MPtriplecamera. HTTP200PNG1600px.",
     "verified_unit_photo": "2316dc38e020200f42cc0d46.webp",
     "verified_unit_color": "black"
+  },
+  {
+    "brand": "Xiaomi",
+    "model": "Redmi Note 11S",
+    "match_regex": "\\bredmi\\s+note\\s*11\\s*s\\b(?!\\s*5g)",
+    "page_url": "https://www.mi.com/de/product/redmi-note-11s/",
+    "image_url": "https://i01.appmifile.com/webfile/globalimg/JenniferK/Product/K7Sblack.png",
+    "view": "front_back",
+    "color": "gray",
+    "notes": "CurrentSKU15GraphiteGrayactualrear/cameraphoto visuallymatched toofficialGermanstockimage. HTTP200originalPNG, noimageedits.",
+    "verified_unit_photo": "2c945e7ac35ea7d25f653e42.webp",
+    "verified_unit_color": "gray"
+  },
+  {
+    "brand": "Xiaomi",
+    "model": "Redmi Note 13 Pro+ 5G",
+    "match_regex": "\\bredmi\\s+note\\s*13\\s*pro\\s*\\+\\s*(?:5g)?\\b",
+    "page_url": "https://www.mi.com/in/product/redmi-note-13-pro-plus-5g/",
+    "image_url": "https://i03.appmifile.com/691_item_in/04/07/2024/5ddc08b1d337f1ac7d23de835717dd56.png",
+    "view": "front_back",
+    "color": "black",
+    "notes": "CurrentSKU23blackactualfullrearphotovisuallymatched toofficialIndiaFusionBlackstockimage.Deviceonscreennamepartoffactoryscreenart. HTTP200originalPNG, noimageedits.",
+    "verified_unit_photo": "7208fea5ae7639fd9852aba7.webp",
+    "verified_unit_color": "black"
   }
 ]
